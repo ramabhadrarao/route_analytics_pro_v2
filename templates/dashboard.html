@@ -1,0 +1,821 @@
+<!-- templates/dashboard.html - Main Dashboard for Route Analysis System -->
+<!-- Purpose: Main interface with route management, API status, and PDF generation -->
+<!-- Dependencies: Bootstrap 5, jQuery, Chart.js -->
+<!-- Author: Route Analysis System -->
+<!-- Created: 2024 -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Route Analysis System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #0052a3;
+            --secondary-color: #3c3c3c;
+            --success-color: #28a745;
+            --warning-color: #fd7e14;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #004080 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        .main-container {
+            margin-top: 20px;
+        }
+        
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            border-left: 5px solid var(--primary-color);
+            transition: transform 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+        
+        .stats-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .upload-zone {
+            background: white;
+            border: 3px dashed #dee2e6;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--primary-color);
+            background-color: #f8f9fa;
+        }
+        
+        .upload-zone i {
+            font-size: 3rem;
+            color: #dee2e6;
+            margin-bottom: 20px;
+        }
+        
+        .upload-zone:hover i {
+            color: var(--primary-color);
+        }
+        
+        .route-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-left: 4px solid var(--info-color);
+        }
+        
+        .api-status {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .api-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .api-working { background-color: var(--success-color); }
+        .api-error { background-color: var(--danger-color); }
+        .api-unknown { background-color: #6c757d; }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #004080 100%);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 600;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #004080 0%, var(--primary-color) 100%);
+        }
+        
+        .progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .modal-content {
+            border-radius: 15px;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #004080 100%);
+            color: white;
+            border-radius: 15px 15px 0 0;
+        }
+        
+        .page-selector {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .page-checkbox {
+            margin: 10px 0;
+        }
+        
+        .alert-custom {
+            border-radius: 10px;
+            border: none;
+            padding: 15px 20px;
+        }
+        
+        .table-custom {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            display: none;
+        }
+        
+        .loading-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-route me-2"></i>
+                Route Analysis System
+            </a>
+            <div class="navbar-nav ms-auto">
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-user me-2"></i>Admin
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="testAPIs()">
+                            <i class="fas fa-flask me-2"></i>Test APIs
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/logout">
+                            <i class="fas fa-sign-out-alt me-2"></i>Logout
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <!-- Alert Area -->
+        <div id="alerts"></div>
+        
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number" id="totalRoutes">{{ recent_routes|length }}</div>
+                    <div class="stats-label">Total Routes</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number" id="apiCalls">-</div>
+                    <div class="stats-label">API Calls Today</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number" id="workingAPIs">-</div>
+                    <div class="stats-label">Working APIs</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number" id="storedImages">-</div>
+                    <div class="stats-label">Stored Images</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <!-- Upload Section -->
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-upload me-2"></i>
+                            Upload Route CSV
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-zone" onclick="document.getElementById('csvFile').click()">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <h4>Drag & Drop CSV File or Click to Browse</h4>
+                            <p class="text-muted">Upload CSV file with latitude,longitude coordinates</p>
+                            <div class="mt-3">
+                                <span class="badge bg-success me-2">SQLite Storage</span>
+                                <span class="badge bg-info me-2">API Tracking</span>
+                                <span class="badge bg-warning">Image Storage</span>
+                            </div>
+                        </div>
+                        
+                        <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                        
+                        <div class="progress-container">
+                            <div class="progress mb-3">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <div class="text-center">
+                                <small class="text-muted" id="progressText">Processing...</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recent Routes -->
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            Recent Routes
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="routesList">
+                            {% for route in recent_routes %}
+                            <div class="route-card">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1">{{ route.from_address or 'Unknown' }} → {{ route.to_address or 'Unknown' }}</h6>
+                                        <p class="text-muted mb-1">
+                                            <i class="fas fa-route me-1"></i>{{ route.distance or 'Unknown' }} | 
+                                            <i class="fas fa-clock me-1"></i>{{ route.duration or 'Unknown' }}
+                                        </p>
+                                        <small class="text-muted">
+                                            <i class="fas fa-calendar me-1"></i>{{ route.created_at[:16] }}
+                                        </small>
+                                    </div>
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-outline-primary" onclick="viewRoute('{{ route.id }}')">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                        <button class="btn btn-sm btn-primary" onclick="generatePDF('{{ route.id }}')">
+                                            <i class="fas fa-file-pdf"></i> PDF
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-inbox fa-2x text-muted mb-3"></i>
+                                <h6 class="text-muted">No routes analyzed yet</h6>
+                                <p class="text-muted">Upload a CSV file to get started</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- API Status Sidebar -->
+            <div class="col-lg-4">
+                <div class="api-status">
+                    <h5 class="mb-3">
+                        <i class="fas fa-server me-2"></i>
+                        API Status
+                    </h5>
+                    <div id="apiStatusList">
+                        <div class="text-center py-3">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <small class="text-muted d-block">Loading API status...</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button class="btn btn-primary btn-sm w-100" onclick="testAPIs()">
+                            <i class="fas fa-flask me-2"></i>Test All APIs
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PDF Generation Modal -->
+    <div class="modal fade" id="pdfModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-pdf me-2"></i>
+                        Generate PDF Report
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="page-selector">
+                        <h6 class="mb-3">Select Pages to Include:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_title" value="title" checked>
+                                    <label for="page_title" class="ms-2">Title Page</label>
+                                </div>
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_overview" value="overview" checked>
+                                    <label for="page_overview" class="ms-2">Route Overview</label>
+                                </div>
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_turns" value="turns" checked>
+                                    <label for="page_turns" class="ms-2">Sharp Turns Analysis</label>
+                                </div>
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_pois" value="pois" checked>
+                                    <label for="page_pois" class="ms-2">Points of Interest</label>
+                                </div>
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_network" value="network" checked>
+                                    <label for="page_network" class="ms-2">Network Coverage</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_weather" value="weather" checked>
+                                    <label for="page_weather" class="ms-2">Weather Analysis</label>
+                                </div>
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_compliance" value="compliance" checked>
+                                    <label for="page_compliance" class="ms-2">Regulatory Compliance</label>
+                                </div>
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_elevation" value="elevation" checked>
+                                    <label for="page_elevation" class="ms-2">Elevation Analysis</label>
+                                </div>
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_emergency" value="emergency" checked>
+                                    <label for="page_emergency" class="ms-2">Emergency Planning</label>
+                                </div>
+                                <div class="page-checkbox">
+                                    <input type="checkbox" id="page_api_status" value="api_status">
+                                    <label for="page_api_status" class="ms-2">API Status Report</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="selectAllPages()">
+                                <i class="fas fa-check-double me-1"></i>Select All
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="selectNoPages()">
+                                <i class="fas fa-times me-1"></i>Select None
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info alert-custom">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Note:</strong> PDF generation will use data stored in the database for this route. 
+                        Only select the pages you need to reduce file size and generation time.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="confirmGeneratePDF()">
+                        <i class="fas fa-file-pdf me-2"></i>Generate PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Route Details Modal -->
+    <div class="modal fade" id="routeModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-route me-2"></i>
+                        Route Details
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="routeDetailsContent">
+                        <div class="text-center py-4">
+                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                            <p class="mt-2">Loading route details...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <i class="fas fa-spinner fa-spin fa-3x text-primary mb-3"></i>
+            <h5>Processing...</h5>
+            <p class="text-muted" id="loadingText">Please wait while we process your request</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let currentRouteId = null;
+        
+        $(document).ready(function() {
+            loadAPIStatus();
+            loadStatistics();
+            setupFileUpload();
+        });
+        
+        function setupFileUpload() {
+            const uploadZone = $('.upload-zone');
+            const fileInput = $('#csvFile');
+            
+            // Drag and drop handlers
+            uploadZone.on('dragover', function(e) {
+                e.preventDefault();
+                $(this).addClass('dragover');
+            });
+            
+            uploadZone.on('dragleave', function(e) {
+                e.preventDefault();
+                $(this).removeClass('dragover');
+            });
+            
+            uploadZone.on('drop', function(e) {
+                e.preventDefault();
+                $(this).removeClass('dragover');
+                
+                const files = e.originalEvent.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFileUpload(files[0]);
+                }
+            });
+            
+            fileInput.on('change', function() {
+                if (this.files.length > 0) {
+                    handleFileUpload(this.files[0]);
+                }
+            });
+        }
+        
+        function handleFileUpload(file) {
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                showAlert('Please select a CSV file', 'danger');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('csv_file', file);
+            
+            // Show progress
+            $('.progress-container').show();
+            $('.upload-zone').hide();
+            
+            // Simulate progress
+            let progress = 0;
+            const progressMessages = [
+                'Uploading CSV file...',
+                'Reading GPS coordinates...',
+                'Analyzing sharp turns...',
+                'Finding points of interest...',
+                'Testing network coverage...',
+                'Getting weather data...',
+                'Storing images...',
+                'Finalizing analysis...'
+            ];
+            let messageIndex = 0;
+            
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90;
+                
+                $('.progress-bar').css('width', progress + '%');
+                
+                if (messageIndex < progressMessages.length - 1 && progress > (messageIndex + 1) * 12) {
+                    messageIndex++;
+                    $('#progressText').text(progressMessages[messageIndex]);
+                }
+            }, 800);
+            
+            $.ajax({
+                url: '/upload-csv',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    clearInterval(progressInterval);
+                    $('.progress-bar').css('width', '100%');
+                    $('#progressText').text('Analysis complete!');
+                    
+                    if (response.status === 'success') {
+                        showAlert('Route analyzed successfully!', 'success');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        showAlert(response.message || 'Analysis failed', 'danger');
+                        resetUploadArea();
+                    }
+                },
+                error: function(xhr) {
+                    clearInterval(progressInterval);
+                    const response = xhr.responseJSON;
+                    showAlert(response?.error || 'Upload failed', 'danger');
+                    resetUploadArea();
+                }
+            });
+        }
+        
+        function resetUploadArea() {
+            setTimeout(() => {
+                $('.progress-container').hide();
+                $('.upload-zone').show();
+                $('.progress-bar').css('width', '0%');
+                $('#progressText').text('Processing...');
+            }, 2000);
+        }
+        
+        function loadAPIStatus() {
+            $.ajax({
+                url: '/api/status',
+                method: 'GET',
+                success: function(response) {
+                    displayAPIStatus(response);
+                },
+                error: function() {
+                    $('#apiStatusList').html('<div class="text-danger">Failed to load API status</div>');
+                }
+            });
+        }
+        
+        function displayAPIStatus(status) {
+            let html = '';
+            const apiConfig = status.api_configuration || {};
+            
+            for (const [apiName, config] of Object.entries(apiConfig)) {
+                const indicator = config.configured ? 'api-working' : 'api-error';
+                const statusText = config.configured ? 'Configured' : 'Not configured';
+                
+                html += `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <span class="api-indicator ${indicator}"></span>
+                            ${apiName.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </div>
+                        <small class="text-muted">${statusText}</small>
+                    </div>
+                `;
+            }
+            
+            $('#apiStatusList').html(html);
+            
+            // Update working APIs count
+            const workingCount = Object.values(apiConfig).filter(c => c.configured).length;
+            $('#workingAPIs').text(workingCount);
+        }
+        
+        function loadStatistics() {
+            // This would load from API in real implementation
+            $('#apiCalls').text('Loading...');
+            $('#storedImages').text('Loading...');
+            
+            // Simulate loading statistics
+            setTimeout(() => {
+                $('#apiCalls').text('0'); // Would come from API
+                $('#storedImages').text('0'); // Would come from API
+            }, 1000);
+        }
+        
+        function testAPIs() {
+            showLoading('Testing all APIs...');
+            
+            $.ajax({
+                url: '/api/test-apis',
+                method: 'GET',
+                success: function(response) {
+                    hideLoading();
+                    
+                    const workingCount = response.working_apis || 0;
+                    const totalCount = response.total_apis || 0;
+                    const successRate = response.success_rate || 0;
+                    
+                    if (successRate >= 80) {
+                        showAlert(`API Test Complete: ${workingCount}/${totalCount} APIs working (${successRate}%)`, 'success');
+                    } else if (successRate >= 50) {
+                        showAlert(`API Test Complete: ${workingCount}/${totalCount} APIs working (${successRate}%)`, 'warning');
+                    } else {
+                        showAlert(`API Test Complete: ${workingCount}/${totalCount} APIs working (${successRate}%)`, 'danger');
+                    }
+                    
+                    loadAPIStatus(); // Refresh status
+                },
+                error: function() {
+                    hideLoading();
+                    showAlert('Failed to test APIs', 'danger');
+                }
+            });
+        }
+        
+        function viewRoute(routeId) {
+            currentRouteId = routeId;
+            
+            $.ajax({
+                url: `/api/routes/${routeId}`,
+                method: 'GET',
+                success: function(response) {
+                    displayRouteDetails(response);
+                    $('#routeModal').modal('show');
+                },
+                error: function() {
+                    showAlert('Failed to load route details', 'danger');
+                }
+            });
+        }
+        
+        function displayRouteDetails(data) {
+            const route = data.route_info;
+            const stats = {
+                total_points: route.total_points || 0,
+                sharp_turns: data.sharp_turns?.length || 0,
+                pois: Object.values(data.pois || {}).reduce((sum, poi_list) => sum + poi_list.length, 0),
+                images: data.stored_images?.length || 0
+            };
+            
+            const html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Route Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>From:</strong></td><td>${route.from_address || 'Unknown'}</td></tr>
+                            <tr><td><strong>To:</strong></td><td>${route.to_address || 'Unknown'}</td></tr>
+                            <tr><td><strong>Distance:</strong></td><td>${route.distance || 'Unknown'}</td></tr>
+                            <tr><td><strong>Duration:</strong></td><td>${route.duration || 'Unknown'}</td></tr>
+                            <tr><td><strong>Created:</strong></td><td>${route.created_at?.substring(0, 16) || 'Unknown'}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Analysis Statistics</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>GPS Points:</strong></td><td>${stats.total_points}</td></tr>
+                            <tr><td><strong>Sharp Turns:</strong></td><td>${stats.sharp_turns}</td></tr>
+                            <tr><td><strong>POIs Found:</strong></td><td>${stats.pois}</td></tr>
+                            <tr><td><strong>Images Stored:</strong></td><td>${stats.images}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <h6>Available Data Pages</h6>
+                    <div class="row">
+                        <div class="col-md-4"><span class="badge bg-success">Route Overview</span></div>
+                        <div class="col-md-4"><span class="badge bg-info">Sharp Turns (${stats.sharp_turns})</span></div>
+                        <div class="col-md-4"><span class="badge bg-warning">POIs (${stats.pois})</span></div>
+                        <div class="col-md-4"><span class="badge bg-primary">Network Coverage</span></div>
+                        <div class="col-md-4"><span class="badge bg-secondary">Weather Data</span></div>
+                        <div class="col-md-4"><span class="badge bg-danger">Emergency Planning</span></div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <button class="btn btn-primary" onclick="generatePDF('${route.id}')">
+                        <i class="fas fa-file-pdf me-2"></i>Generate PDF Report
+                    </button>
+                </div>
+            `;
+            
+            $('#routeDetailsContent').html(html);
+        }
+        
+        function generatePDF(routeId) {
+            currentRouteId = routeId;
+            $('#routeModal').modal('hide');
+            $('#pdfModal').modal('show');
+        }
+        
+        function selectAllPages() {
+            $('.page-checkbox input[type="checkbox"]').prop('checked', true);
+        }
+        
+        function selectNoPages() {
+            $('.page-checkbox input[type="checkbox"]').prop('checked', false);
+        }
+        
+        function confirmGeneratePDF() {
+            const selectedPages = [];
+            $('.page-checkbox input[type="checkbox"]:checked').each(function() {
+                selectedPages.push($(this).val());
+            });
+            
+            if (selectedPages.length === 0) {
+                showAlert('Please select at least one page to generate', 'warning');
+                return;
+            }
+            
+            $('#pdfModal').modal('hide');
+            showLoading('Generating PDF report...');
+            
+            const pagesParam = selectedPages.join(',');
+            const url = `/api/pdf/${currentRouteId}?pages=${pagesParam}`;
+            
+            // Create a temporary link to download the PDF
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `route_analysis_${currentRouteId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            hideLoading();
+            showAlert(`PDF report generated successfully with ${selectedPages.length} pages`, 'success');
+        }
+        
+        function showAlert(message, type) {
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show alert-custom" role="alert">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : type === 'danger' ? 'times-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            $('#alerts').html(alertHtml);
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                $('.alert').fadeOut();
+            }, 5000);
+        }
+        
+        function showLoading(text) {
+            $('#loadingText').text(text);
+            $('#loadingOverlay').show();
+        }
+        
+        function hideLoading() {
+            $('#loadingOverlay').hide();
+        }
+    </script>
+</body>
+</html>

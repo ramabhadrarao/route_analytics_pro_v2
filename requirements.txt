@@ -1,0 +1,45 @@
+# requirements.txt - Python Dependencies for Route Analysis System
+# Purpose: Define all required Python packages with versions
+# Author: Route Analysis System
+# Created: 2024
+
+# Core Framework
+Flask==2.3.3
+Werkzeug==2.3.7
+
+# Database
+#sqlite3  # Built into Python
+
+# API and HTTP
+requests==2.31.0
+googlemaps==4.10.0
+
+# Environment management
+python-dotenv==1.0.0
+
+# Data processing
+pandas==2.1.1
+numpy==1.24.3
+geopy==2.4.0
+
+# PDF Generation
+fpdf2==2.7.6
+matplotlib==3.7.2
+Pillow==10.0.1
+
+# Image processing
+Pillow==10.0.1
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Optional: For better CSV handling
+chardet==5.2.0
+
+# Optional: For enhanced networking
+urllib3==2.0.7
+
+# Development (optional)
+# pytest==7.4.2
+# pytest-flask==1.2.0
