@@ -238,25 +238,24 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS emergency_contacts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     route_id TEXT NOT NULL,
-                    place_id TEXT,
                     facility_type TEXT NOT NULL,
                     name TEXT NOT NULL,
-                    phone_number TEXT,
-                    formatted_phone_number TEXT,
-                    international_phone_number TEXT,
-                    address TEXT,
                     latitude REAL NOT NULL,
                     longitude REAL NOT NULL,
-                    rating REAL,
+                    address TEXT,
+                    phone_number TEXT,
+                    formatted_phone TEXT,
+                    international_phone TEXT,
+                    website TEXT, 
+                    detailed_address TEXT,
                     opening_hours TEXT,
-                    website TEXT,
+                    place_id TEXT,
+                    rating REAL,
+                    types TEXT,
+                    additional_info TEXT,
                     distance_from_route REAL,
-                    is_emergency_service BOOLEAN DEFAULT 1,
-                    is_24_7 BOOLEAN DEFAULT 0,
-                    verified_phone BOOLEAN DEFAULT 0,
-                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (route_id) REFERENCES routes (id),
-                    UNIQUE(route_id, place_id)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (route_id) REFERENCES routes (id)
                 )
             """)
             
