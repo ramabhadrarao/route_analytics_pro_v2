@@ -393,13 +393,23 @@ class RouteAPI:
             return {'error': str(e)}
     
     def get_elevation_data(self, route_id: str) -> Dict[str, Any]:
-        """Get elevation data (Page 7: Elevation Analysis)"""
+        """Get elevation data with better error handling and debugging"""
         try:
             import sqlite3
             
             with sqlite3.connect(self.db_manager.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
+                
+                # First, check if we have ANY elevation data for this route
+                cursor.execute("SELECT COUNT(*) as count FROM elevation_data WHERE route_id = ?", (route_id,))
+                count_result = cursor.fetchone()
+                record_count = count_result['count'] if count_result else 0
+                
+                print(f"🔍 Found {record_count} elevation records for route {route_id}")
+                
+                if record_count == 0:
+                    return {'error': f'No elevation data found for route {route_id}. Google Elevation API may have failed during analysis.'}
                 
                 cursor.execute("""
                     SELECT * FROM elevation_data 
@@ -408,66 +418,182 @@ class RouteAPI:
                 """, (route_id,))
                 
                 elevation_data = [dict(row) for row in cursor.fetchall()]
-            
-            if not elevation_data:
-                return {'error': 'No elevation data available'}
-            
-            # Calculate elevation statistics
-            elevations = [point['elevation'] for point in elevation_data]
-            
-            min_elevation = min(elevations)
-            max_elevation = max(elevations)
-            avg_elevation = sum(elevations) / len(elevations)
-            elevation_range = max_elevation - min_elevation
-            
-            # Identify significant elevation changes
-            significant_changes = []
-            for i in range(1, len(elevation_data)):
-                prev_elevation = elevation_data[i-1]['elevation']
-                curr_elevation = elevation_data[i]['elevation']
-                change = abs(curr_elevation - prev_elevation)
                 
-                if change > 100:  # Significant change threshold
-                    significant_changes.append({
-                        'location': {
-                            'latitude': elevation_data[i]['latitude'],
-                            'longitude': elevation_data[i]['longitude']
-                        },
-                        'elevation_change': change,
-                        'type': 'ascent' if curr_elevation > prev_elevation else 'descent',
-                        'from_elevation': prev_elevation,
-                        'to_elevation': curr_elevation
-                    })
-            
-            return {
-                'elevation_points': elevation_data,
-                'statistics': {
-                    'min_elevation': round(min_elevation, 1),
-                    'max_elevation': round(max_elevation, 1),
-                    'average_elevation': round(avg_elevation, 1),
-                    'elevation_range': round(elevation_range, 1),
-                    'total_points': len(elevation_data)
-                },
-                'significant_changes': significant_changes,
-                'terrain_analysis': {
-                    'terrain_type': self._classify_terrain(elevation_range, avg_elevation),
-                    'driving_difficulty': self._assess_driving_difficulty(significant_changes),
-                    'fuel_impact': self._assess_fuel_impact(significant_changes)
+                if not elevation_data:
+                    return {'error': 'No elevation data available'}
+                
+                # Calculate elevation statistics
+                elevations = [point['elevation'] for point in elevation_data]
+                
+                min_elevation = min(elevations)
+                max_elevation = max(elevations)
+                avg_elevation = sum(elevations) / len(elevations)
+                elevation_range = max_elevation - min_elevation
+                
+                # Identify significant elevation changes
+                significant_changes = []
+                for i in range(1, len(elevation_data)):
+                    prev_elevation = elevation_data[i-1]['elevation']
+                    curr_elevation = elevation_data[i]['elevation']
+                    change = abs(curr_elevation - prev_elevation)
+                    
+                    if change > 50:  # 50m threshold for significant change
+                        significant_changes.append({
+                            'location': {
+                                'latitude': elevation_data[i]['latitude'],
+                                'longitude': elevation_data[i]['longitude']
+                            },
+                            'elevation_change': change,
+                            'type': 'ascent' if curr_elevation > prev_elevation else 'descent',
+                            'from_elevation': prev_elevation,
+                            'to_elevation': curr_elevation
+                        })
+                
+                # Classify terrain
+                terrain_type = self._classify_terrain(elevation_range, avg_elevation)
+                driving_difficulty = self._assess_driving_difficulty(significant_changes)
+                fuel_impact = self._assess_fuel_impact(significant_changes)
+                
+                return {
+                    'elevation_points': elevation_data,
+                    'statistics': {
+                        'min_elevation': round(min_elevation, 1),
+                        'max_elevation': round(max_elevation, 1),
+                        'average_elevation': round(avg_elevation, 1),
+                        'elevation_range': round(elevation_range, 1),
+                        'total_points': len(elevation_data)
+                    },
+                    'significant_changes': significant_changes,
+                    'terrain_analysis': {
+                        'terrain_type': terrain_type,
+                        'driving_difficulty': driving_difficulty,
+                        'fuel_impact': fuel_impact
+                    }
                 }
-            }
-            
+                
         except Exception as e:
+            print(f"❌ Error getting elevation data: {e}")
             return {'error': str(e)}
     
     def get_traffic_data(self, route_id: str) -> Dict[str, Any]:
-        """Get traffic data (Page 8: Traffic Analysis) - Placeholder"""
-        # This would integrate with traffic APIs in a real implementation
-        return {
-            'message': 'Traffic analysis feature available with API integration',
-            'status': 'placeholder',
-            'available_with': ['TomTom API', 'HERE API', 'Google Traffic API']
-        }
-    
+        """Get traffic data from database - REAL IMPLEMENTATION"""
+        try:
+            import sqlite3
+            
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Check if we have traffic data
+                cursor.execute("SELECT COUNT(*) as count FROM traffic_data WHERE route_id = ?", (route_id,))
+                count_result = cursor.fetchone()
+                record_count = count_result['count'] if count_result else 0
+                
+                print(f"🔍 Found {record_count} traffic records for route {route_id}")
+                
+                if record_count == 0:
+                    return {'error': f'No traffic data found for route {route_id}. Traffic analysis may not have been completed.'}
+                
+                cursor.execute("""
+                    SELECT * FROM traffic_data 
+                    WHERE route_id = ?
+                    ORDER BY id
+                """, (route_id,))
+                
+                traffic_data = [dict(row) for row in cursor.fetchall()]
+                
+                # Analyze traffic statistics
+                congestion_counts = {}
+                total_segments = len(traffic_data)
+                avg_travel_time_index = 0
+                avg_current_speed = 0
+                avg_free_flow_speed = 0
+                
+                for data in traffic_data:
+                    congestion = data['congestion_level']
+                    congestion_counts[congestion] = congestion_counts.get(congestion, 0) + 1
+                    avg_travel_time_index += data.get('travel_time_index', 1.0)
+                    avg_current_speed += data.get('current_speed', 0)
+                    avg_free_flow_speed += data.get('free_flow_speed', 0)
+                
+                # Calculate averages
+                if total_segments > 0:
+                    avg_travel_time_index /= total_segments
+                    avg_current_speed /= total_segments
+                    avg_free_flow_speed /= total_segments
+                
+                # Calculate overall traffic score
+                heavy_segments = congestion_counts.get('HEAVY', 0)
+                moderate_segments = congestion_counts.get('MODERATE', 0)
+                light_segments = congestion_counts.get('LIGHT', 0)
+                free_flow_segments = congestion_counts.get('FREE_FLOW', 0)
+                
+                # Traffic score (0-100, higher is better)
+                traffic_score = ((free_flow_segments * 100) + (light_segments * 75) + 
+                            (moderate_segments * 50) + (heavy_segments * 25)) / total_segments if total_segments > 0 else 0
+                
+                return {
+                    'traffic_analysis': traffic_data,
+                    'statistics': {
+                        'total_segments_analyzed': total_segments,
+                        'average_travel_time_index': round(avg_travel_time_index, 2),
+                        'average_current_speed': round(avg_current_speed, 1),
+                        'average_free_flow_speed': round(avg_free_flow_speed, 1),
+                        'overall_traffic_score': round(traffic_score, 1),
+                        'congestion_distribution': congestion_counts,
+                        'traffic_condition': self._get_traffic_condition(traffic_score)
+                    },
+                    'congestion_analysis': {
+                        'heavy_traffic_segments': heavy_segments,
+                        'moderate_traffic_segments': moderate_segments,
+                        'light_traffic_segments': light_segments,
+                        'free_flow_segments': free_flow_segments,
+                        'worst_congestion_percentage': round((heavy_segments / total_segments) * 100, 1) if total_segments > 0 else 0
+                    },
+                    'recommendations': self._generate_traffic_recommendations(traffic_score, congestion_counts)
+                }
+                
+        except Exception as e:
+            print(f"❌ Error getting traffic data: {e}")
+            return {'error': str(e)}
+    def _get_traffic_condition(self, score: float) -> str:
+        """Get traffic condition based on score"""
+        if score >= 80:
+            return "EXCELLENT"
+        elif score >= 60:
+            return "GOOD"
+        elif score >= 40:
+            return "MODERATE"
+        elif score >= 20:
+            return "POOR"
+        else:
+            return "SEVERE"
+
+    def _generate_traffic_recommendations(self, score: float, congestion_counts: Dict) -> List[str]:
+        """Generate traffic-based recommendations"""
+        recommendations = []
+        
+        heavy_count = congestion_counts.get('HEAVY', 0)
+        moderate_count = congestion_counts.get('MODERATE', 0)
+        
+        if heavy_count > 0:
+            recommendations.append(f"Route has {heavy_count} heavily congested segments - consider alternative routes")
+            recommendations.append("Plan for significant delays during peak hours")
+        
+        if moderate_count > 0:
+            recommendations.append(f"{moderate_count} segments have moderate traffic - allow extra travel time")
+        
+        if score < 50:
+            recommendations.append("Consider traveling during off-peak hours to avoid traffic")
+            recommendations.append("Use real-time navigation apps for dynamic route optimization")
+        
+        recommendations.extend([
+            "Check current traffic conditions before departure",
+            "Consider public transportation alternatives for heavily congested routes",
+            "Plan rest stops during low-traffic segments"
+        ])
+        
+        return recommendations
     def get_emergency_data(self, route_id: str) -> Dict[str, Any]:
         """Get emergency preparedness data (Page 9: Emergency Planning)"""
         try:

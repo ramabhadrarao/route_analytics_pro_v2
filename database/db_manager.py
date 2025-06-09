@@ -507,7 +507,39 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting API stats: {e}")
             return {}
-    
+    def store_pois_with_coordinates(self, route_id: str, pois: Dict, poi_type: str) -> bool:
+        """Store points of interest WITH REAL GPS COORDINATES"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                for poi_key, poi_data in pois.items():
+                    cursor.execute("""
+                        INSERT INTO pois 
+                        (route_id, poi_type, name, latitude, longitude, address, 
+                        distance_from_route, additional_info)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        route_id, 
+                        poi_type, 
+                        poi_data['name'], 
+                        poi_data['latitude'],      # REAL GPS LATITUDE
+                        poi_data['longitude'],     # REAL GPS LONGITUDE
+                        poi_data['address'],
+                        0,  # distance_from_route - could be calculated later
+                        json.dumps({
+                            'place_id': poi_data.get('place_id', ''),
+                            'rating': poi_data.get('rating', 0),
+                            'types': poi_data.get('types', [])
+                        })
+                    ))
+                
+                conn.commit()
+                return True
+                
+        except Exception as e:
+            print(f"Error storing POIs with coordinates: {e}")
+            return False
     def get_stored_images(self, route_id: str, image_type: str = None) -> List[Dict]:
         """Get stored images for route"""
         try:

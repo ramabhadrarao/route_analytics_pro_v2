@@ -518,7 +518,22 @@
                                         <small class="d-block text-muted">Terrain heights and gradients</small>
                                     </label>
                                 </div>
-                                
+                                <div class="page-checkbox enhanced">
+        <input type="checkbox" id="page_traffic" value="traffic" checked>
+        <label for="page_traffic" class="ms-2 enhanced-label">
+            <i class="fas fa-traffic-light me-1"></i>
+            <strong>Traffic Analysis</strong>
+            <div class="enhanced-description">
+                Real-time traffic conditions and congestion analysis from Google Directions API
+            </div>
+            <div class="feature-badges">
+                <span class="feature-badge danger">Live Traffic</span>
+                <span class="feature-badge warning">Congestion</span>
+                <span class="feature-badge info">Travel Times</span>
+                <span class="feature-badge success">Speed Analysis</span>
+            </div>
+        </label>
+    </div>
                                 <div class="page-checkbox">
                                     <input type="checkbox" id="page_emergency" value="emergency" checked>
                                     <label for="page_emergency" class="ms-2">
@@ -964,7 +979,7 @@
         function selectCriticalPages() {
             // Select only critical pages: title, overview, turns (with images), emergency
             $('.page-checkbox input[type="checkbox"]').prop('checked', false);
-            $('#page_title, #page_overview, #page_turns, #page_emergency').prop('checked', true);
+            $('#page_title, #page_overview, #page_turns, #page_traffic, #page_emergency').prop('checked', true);
         }
         
         function selectWithImages() {
@@ -976,52 +991,59 @@
         function selectEssential() {
             // Select essential pages: title, overview, turns, pois, emergency
             $('.page-checkbox input[type="checkbox"]').prop('checked', false);
-            $('#page_title, #page_overview, #page_turns, #page_pois, #page_emergency').prop('checked', true);
+            $('#page_title, #page_overview, #page_turns, #page_pois, #page_traffic, #page_emergency').prop('checked', true);
         }
         
         function confirmGeneratePDF() {
-            const selectedPages = [];
-            $('.page-checkbox input[type="checkbox"]:checked').each(function() {
-                selectedPages.push($(this).val());
-            });
-            
-            if (selectedPages.length === 0) {
-                showAlert('Please select at least one page to generate', 'warning');
-                return;
-            }
-            
-            // Check if enhanced turns page is selected
-            const hasEnhancedTurns = selectedPages.includes('turns');
-            const hasImagePages = selectedPages.some(page => ['turns', 'route_map', 'images_summary'].includes(page));
-            
-            $('#pdfModal').modal('hide');
-            
-            if (hasImagePages) {
-                showLoading('Generating enhanced PDF with database images...');
-            } else {
-                showLoading('Generating PDF report...');
-            }
-            
-            const pagesParam = selectedPages.join(',');
-            const url = `/api/pdf/${currentRouteId}?pages=${pagesParam}`;
-            
-            // Create a temporary link to download the PDF
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `enhanced_route_analysis_${currentRouteId}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setTimeout(() => {
-                hideLoading();
-                if (hasEnhancedTurns) {
-                    showAlert(`Enhanced PDF generated successfully with ${selectedPages.length} pages including visual turn analysis!`, 'success');
-                } else {
-                    showAlert(`PDF generated successfully with ${selectedPages.length} pages`, 'success');
-                }
-            }, 3000);
+    const selectedPages = [];
+    $('.page-checkbox input[type="checkbox"]:checked').each(function() {
+        selectedPages.push($(this).val());
+    });
+    
+    if (selectedPages.length === 0) {
+        showAlert('Please select at least one page to generate', 'warning');
+        return;
+    }
+    
+    // Check if traffic page is selected
+    const hasTrafficData = selectedPages.includes('traffic');
+    const hasEnhancedTurns = selectedPages.includes('turns');
+    const hasImagePages = selectedPages.some(page => ['turns', 'route_map', 'images_summary'].includes(page));
+    
+    $('#pdfModal').modal('hide');
+    
+    if (hasTrafficData && hasImagePages) {
+        showLoading('Generating enhanced PDF with traffic analysis and visual evidence...');
+    } else if (hasTrafficData) {
+        showLoading('Generating PDF with real-time traffic analysis...');
+    } else if (hasImagePages) {
+        showLoading('Generating enhanced PDF with database images...');
+    } else {
+        showLoading('Generating PDF report...');
+    }
+    
+    const pagesParam = selectedPages.join(',');
+    const url = `/api/pdf/${currentRouteId}?pages=${pagesParam}`;
+    
+    // Create a temporary link to download the PDF
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `enhanced_route_analysis_${currentRouteId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setTimeout(() => {
+        hideLoading();
+        if (hasTrafficData && hasEnhancedTurns) {
+            showAlert(`Enhanced PDF generated successfully with ${selectedPages.length} pages including traffic analysis and visual turn analysis!`, 'success');
+        } else if (hasTrafficData) {
+            showAlert(`PDF generated successfully with ${selectedPages.length} pages including real-time traffic analysis!`, 'success');
+        } else {
+            showAlert(`PDF generated successfully with ${selectedPages.length} pages`, 'success');
         }
+    }, 3000);
+}
         
         function showAlert(message, type) {
             const alertHtml = `
