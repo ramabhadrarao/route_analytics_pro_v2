@@ -55,7 +55,7 @@ class RouteAPI:
             return None
     
     def get_route_overview(self, route_id: str) -> Dict[str, Any]:
-        """Get route overview data (Page 1: Overview)"""
+        """Get route overview data with enhanced safety scoring"""
         try:
             route = self.db_manager.get_route(route_id)
             if not route:
@@ -65,32 +65,33 @@ class RouteAPI:
             sharp_turns = self.db_manager.get_sharp_turns(route_id)
             network_coverage = self.db_manager.get_network_coverage(route_id)
             
-            # Count turn categories
-            extreme_turns = len([t for t in sharp_turns if t['angle'] >= 90])
-            blind_spots = len([t for t in sharp_turns if 80 <= t['angle'] < 90])
-            sharp_danger = len([t for t in sharp_turns if 70 <= t['angle'] < 80])
-            moderate_turns = len([t for t in sharp_turns if 45 <= t['angle'] < 70])
-            
             # Count network issues
-            dead_zones = len([c for c in network_coverage if c['is_dead_zone']])
-            poor_zones = len([c for c in network_coverage if c['is_poor_coverage']])
+            dead_zones = len([c for c in network_coverage if c.get('is_dead_zone')])
+            poor_zones = len([c for c in network_coverage if c.get('is_poor_coverage')])
             
-            # Calculate safety score
-            safety_score = self._calculate_safety_score(sharp_turns, dead_zones, poor_zones)
+            # Calculate enhanced safety score
+            safety_analysis = self._calculate_safety_score(sharp_turns, dead_zones, poor_zones)
             
             overview = {
                 'route_info': route,
                 'statistics': {
                     'total_points': route['total_points'],
                     'total_sharp_turns': len(sharp_turns),
-                    'extreme_turns': extreme_turns,
-                    'blind_spots': blind_spots,
-                    'sharp_danger': sharp_danger,
-                    'moderate_turns': moderate_turns,
+                    'extreme_turns': safety_analysis['hazard_counts']['extreme_turns'],
+                    'blind_spots': safety_analysis['hazard_counts']['blind_spots'],
+                    'sharp_danger': safety_analysis['hazard_counts']['sharp_danger'],
+                    'moderate_turns': safety_analysis['hazard_counts']['moderate_turns'],
                     'dead_zones': dead_zones,
                     'poor_coverage_zones': poor_zones,
-                    'safety_score': safety_score,
-                    'safety_rating': self._get_safety_rating(safety_score)
+                    # Enhanced scoring data
+                    'safety_score': safety_analysis['traditional_score'],  # For backward compatibility
+                    'risk_points': safety_analysis['risk_points'],
+                    'risk_level': safety_analysis['risk_level'],
+                    'risk_category': safety_analysis['risk_category'],
+                    'safety_rating': safety_analysis['safety_rating'],
+                    'color_indicator': safety_analysis['color_indicator'],
+                    'scoring_breakdown': safety_analysis['scoring_breakdown'],
+                    'total_penalty_points': safety_analysis['total_penalty_points']
                 },
                 'generated_at': datetime.datetime.now().isoformat()
             }
@@ -659,22 +660,131 @@ class RouteAPI:
             return {'error': str(e)}
     
     # Helper methods
-    def _calculate_safety_score(self, sharp_turns: List[Dict], dead_zones: int, poor_zones: int) -> int:
-        """Calculate overall safety score"""
-        base_score = 100
+    def _calculate_safety_score(self, sharp_turns: List[Dict], dead_zones: int, poor_zones: int) -> Dict:
+        """Calculate comprehensive safety score with detailed breakdown"""
         
+        # Categorize sharp turns
         extreme_turns = len([t for t in sharp_turns if t['angle'] >= 90])
         blind_spots = len([t for t in sharp_turns if 80 <= t['angle'] < 90])
         sharp_danger = len([t for t in sharp_turns if 70 <= t['angle'] < 80])
+        moderate_turns = len([t for t in sharp_turns if 45 <= t['angle'] < 70])
         
-        base_score -= extreme_turns * 20
-        base_score -= blind_spots * 15
-        base_score -= sharp_danger * 10
-        base_score -= dead_zones * 8
-        base_score -= poor_zones * 4
+        # Calculate individual penalty points
+        penalties = {
+            'extreme_turns': extreme_turns * 20,
+            'blind_spots': blind_spots * 15,
+            'sharp_danger': sharp_danger * 10,
+            'dead_zones': dead_zones * 8,
+            'poor_coverage': poor_zones * 4
+        }
         
-        return max(0, min(100, base_score))
-    
+        total_penalty_points = sum(penalties.values())
+        
+        # Calculate traditional score (0-100 scale)
+        base_score = 100
+        traditional_score = max(0, min(100, base_score - total_penalty_points))
+        
+        # Calculate risk points (higher = more dangerous)
+        risk_points = total_penalty_points
+        
+        # Determine risk level based on risk points
+        if risk_points >= 150:
+            risk_level = "CRITICAL"
+            risk_category = "EXTREME RISK"
+            color_indicator = "RED"
+        elif risk_points >= 100:
+            risk_level = "HIGH"
+            risk_category = "HIGH RISK"
+            color_indicator = "ORANGE"
+        elif risk_points >= 50:
+            risk_level = "MODERATE"
+            risk_category = "MODERATE RISK"
+            color_indicator = "YELLOW"
+        elif risk_points >= 20:
+            risk_level = "LOW"
+            risk_category = "LOW RISK"
+            color_indicator = "BLUE"
+        else:
+            risk_level = "MINIMAL"
+            risk_category = "SAFE ROUTE"
+            color_indicator = "GREEN"
+        
+        # Create detailed scoring breakdown
+        scoring_breakdown = [
+            {
+                'hazard_type': 'Extreme Turns (≥90°)',
+                'count': extreme_turns,
+                'penalty_per_item': 20,
+                'total_penalty': penalties['extreme_turns'],
+                'risk_level': 'CRITICAL' if extreme_turns > 0 else 'NONE'
+            },
+            {
+                'hazard_type': 'High-Risk Blind Spots (80-90°)',
+                'count': blind_spots,
+                'penalty_per_item': 15,
+                'total_penalty': penalties['blind_spots'],
+                'risk_level': 'HIGH' if blind_spots > 0 else 'NONE'
+            },
+            {
+                'hazard_type': 'Sharp Danger Zones (70-80°)',
+                'count': sharp_danger,
+                'penalty_per_item': 10,
+                'total_penalty': penalties['sharp_danger'],
+                'risk_level': 'MODERATE' if sharp_danger > 0 else 'NONE'
+            },
+            {
+                'hazard_type': 'Network Dead Zones',
+                'count': dead_zones,
+                'penalty_per_item': 8,
+                'total_penalty': penalties['dead_zones'],
+                'risk_level': 'HIGH' if dead_zones > 0 else 'NONE'
+            },
+            {
+                'hazard_type': 'Poor Coverage Areas',
+                'count': poor_zones,
+                'penalty_per_item': 4,
+                'total_penalty': penalties['poor_coverage'],
+                'risk_level': 'LOW' if poor_zones > 0 else 'NONE'
+            }
+        ]
+        
+        # Calculate percentages of total risk
+        for item in scoring_breakdown:
+            if total_penalty_points > 0:
+                item['percentage_of_total_risk'] = round((item['total_penalty'] / total_penalty_points) * 100, 1)
+            else:
+                item['percentage_of_total_risk'] = 0
+        
+        return {
+            'traditional_score': traditional_score,
+            'risk_points': risk_points,
+            'risk_level': risk_level,
+            'risk_category': risk_category,
+            'color_indicator': color_indicator,
+            'total_penalty_points': total_penalty_points,
+            'scoring_breakdown': scoring_breakdown,
+            'hazard_counts': {
+                'extreme_turns': extreme_turns,
+                'blind_spots': blind_spots,
+                'sharp_danger': sharp_danger,
+                'moderate_turns': moderate_turns,
+                'dead_zones': dead_zones,
+                'poor_coverage': poor_zones
+            },
+            'safety_rating': self._get_safety_rating_from_points(risk_points)
+        }
+    def _get_safety_rating_from_points(self, risk_points: int) -> str:
+        """Get safety rating based on risk points"""
+        if risk_points >= 150:
+            return 'CRITICAL RISK'
+        elif risk_points >= 100:
+            return 'HIGH RISK'
+        elif risk_points >= 50:
+            return 'MODERATE RISK'
+        elif risk_points >= 20:
+            return 'LOW RISK'
+        else:
+            return 'SAFE ROUTE'
     def _get_safety_rating(self, score: int) -> str:
         """Get safety rating based on score"""
         if score >= 90:

@@ -19,13 +19,30 @@ import io
 import sqlite3
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from translation_before_db import TextTranslator
+try:
+    from .road_quality_analyzer import RoadQualityAnalyzer
+    ROAD_QUALITY_AVAILABLE = True
+    print("✅ Road Quality Analyzer imported successfully")
+except ImportError as e:
+    print(f"⚠️ Road Quality Analyzer not available: {e}")
+    ROAD_QUALITY_AVAILABLE = False
+    
+try:
+    from .environmental_analyzer import EnvironmentalRiskAnalyzer
+    ENVIRONMENTAL_AVAILABLE = True
+    print("✅ Environmental Risk Analyzer imported successfully")
+except ImportError as e:
+    print(f"⚠️ Environmental Risk Analyzer not available: {e}")
+    ENVIRONMENTAL_AVAILABLE = False
 class RouteAnalyzer:
     """Complete route analysis with API integration and data storage"""
     
     def __init__(self, api_tracker):
         self.api_tracker = api_tracker
         self.db_manager = api_tracker.db_manager
-        
+        # ADD THESE LINES:
+        self.road_quality_analyzer = RoadQualityAnalyzer(api_tracker)
+        self.environmental_analyzer = EnvironmentalRiskAnalyzer(api_tracker)
         # Initialize API clients
         self.google_api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
         self.openweather_api_key = os.environ.get('OPENWEATHER_API_KEY')
@@ -114,7 +131,17 @@ class RouteAnalyzer:
             # Step 11: Generate comprehensive map WITH ALL MARKERS
             print("🗺️ Generating comprehensive route map with ALL critical points...")
             self._generate_and_store_route_map(route_id, route_points, sharp_turns)
-            
+            # Step 11: Road Quality Analysis
+            print("🛣️ Analyzing road quality...")
+            road_quality_data = self.road_quality_analyzer.analyze_road_conditions(route_points, route_id)
+            if road_quality_data:
+                self.road_quality_analyzer.store_road_quality_data(route_id, road_quality_data)
+
+            # Step 12: Environmental Risk Analysis  
+            print("🌍 Analyzing environmental risks...")
+            environmental_data = self.environmental_analyzer.analyze_environmental_risks(route_points, route_id)
+            if environmental_data:
+                self.environmental_analyzer.store_environmental_data(route_id, environmental_data)
             print(f"✅ Route analysis completed successfully. Route ID: {route_id}")
             return route_id
             
