@@ -2433,33 +2433,24 @@ class PDFGenerator:
                     
                     safety_legend = [
                         ['SYMBOL', 'COLOR', 'MEANING', 'ACTION REQUIRED'],
-                        ['T1-T15', 'RED', 'Sharp Turns (≥70°)', 'Reduce speed, extreme caution'],
+                        ['T1-T15', 'RED', 'Sharp Turns (>=70 deg)', 'Reduce speed, extreme caution'],
                         ['D', 'PURPLE', 'Network Dead Zones', 'Use satellite communication'],
                         ['T', 'ORANGE', 'Heavy Traffic Areas', 'Allow extra travel time'],
                         ['—', 'BLUE', 'Complete Route Path', 'Follow GPS navigation']
                     ]
                     
-                    # Header
-                    pdf.set_font('Helvetica', 'B', 8)
-                    pdf.set_fill_color(240, 240, 240)
-                    pdf.set_text_color(0, 0, 0)
-                    pdf.set_x(x_start)
-                    for header, width in zip(safety_legend[0], col_widths):
-                        pdf.cell(width, 7, header, 1, 0, 'C', True)
-                    pdf.ln(7)
-
-                    # Rows
-                    pdf.set_font('Helvetica', '', 8)
-                    for row in safety_legend[1:]:
-                        pdf.set_x(x_start)
-                        for i, (cell, width) in enumerate(zip(row, col_widths)):
-                            y_before = pdf.get_y()
-                            pdf.multi_cell(width, 6, str(cell), 1, 'L')
-                            pdf.set_y(y_before)
-                            pdf.set_x(x_start + sum(col_widths[:i+1]))
-                        pdf.ln(6)
+                    # FIXED: Use proper table rendering method
+                    self._render_legend_table(pdf, safety_legend, col_widths, x_start, (240, 240, 240))
                     
-                    # SECTION 2: SERVICES & FACILITIES
+                    # SECTION 2: SERVICES & FACILITIES - CHECK SPACE FIRST
+                    required_space = 8 * 6 + 10  # 8 rows * 6px + header space
+                    if pdf.get_y() + required_space > 270:  # If not enough space, start new page
+                        pdf.add_page()
+                        pdf.set_font('Helvetica', 'B', 11)
+                        pdf.set_text_color(*self.primary_color)
+                        pdf.cell(0, 6, 'MAP LEGEND & SYMBOL GUIDE (CONTINUED)', 0, 1, 'C')
+                        pdf.ln(5)
+                    
                     pdf.ln(5)
                     pdf.set_font('Helvetica', 'B', 10)
                     pdf.set_text_color(*self.info_color)
@@ -2475,27 +2466,18 @@ class PDFGenerator:
                         ['R', 'ORANGE', 'Restaurants', 'Food & rest stops']
                     ]
                     
-                    # Header
-                    pdf.set_font('Helvetica', 'B', 8)
-                    pdf.set_fill_color(245, 250, 255)
-                    pdf.set_text_color(0, 0, 0)
-                    pdf.set_x(x_start)
-                    for header, width in zip(services_legend[0], col_widths):
-                        pdf.cell(width, 7, header, 1, 0, 'C', True)
-                    pdf.ln(7)
+                    # FIXED: Use proper table rendering method with space check
+                    self._render_legend_table_with_page_check(pdf, services_legend, col_widths, x_start, (245, 250, 255))
 
-                    # Rows
-                    pdf.set_font('Helvetica', '', 8)
-                    for row in services_legend[1:]:
-                        pdf.set_x(x_start)
-                        for i, (cell, width) in enumerate(zip(row, col_widths)):
-                            y_before = pdf.get_y()
-                            pdf.multi_cell(width, 6, str(cell), 1, 'L')
-                            pdf.set_y(y_before)
-                            pdf.set_x(x_start + sum(col_widths[:i+1]))
-                        pdf.ln(6)
-
-                    # SECTION 3: MAP STATISTICS
+                    # SECTION 3: MAP STATISTICS - CHECK SPACE FIRST
+                    stats_space_needed = 60  # Approximate space needed for statistics section
+                    if pdf.get_y() + stats_space_needed > 260:  # Leave more margin for statistics
+                        pdf.add_page()
+                        pdf.set_font('Helvetica', 'B', 11)
+                        pdf.set_text_color(*self.primary_color)
+                        pdf.cell(0, 6, 'MAP STATISTICS & TECHNICAL DETAILS', 0, 1, 'C')
+                        pdf.ln(5)
+                    
                     pdf.ln(8)
                     pdf.set_font('Helvetica', 'B', 10)
                     pdf.set_text_color(*self.primary_color)
@@ -2532,17 +2514,29 @@ class PDFGenerator:
                     pdf.set_text_color(0, 0, 0)
                     start_y = pdf.get_y()
                     
+                    # FIXED: Better two-column layout with proper spacing
                     pdf.set_xy(15, start_y)
-                    for stat in left_stats:
+                    for i, stat in enumerate(left_stats):
                         pdf.cell(90, 4, f"• {stat}", 0, 1, 'L')
-                        pdf.set_x(15)
+                        if i < len(left_stats) - 1:  # Don't move X for last item
+                            pdf.set_x(15)
                     
+                    # Right column
                     pdf.set_xy(110, start_y)
-                    for stat in right_stats:
+                    for i, stat in enumerate(right_stats):
                         pdf.cell(85, 4, f"• {stat}", 0, 1, 'L')
-                        pdf.set_x(110)
+                        if i < len(right_stats) - 1:  # Don't move X for last item
+                            pdf.set_x(110)
                     
-                    # USAGE INSTRUCTIONS
+                    # USAGE INSTRUCTIONS - CHECK SPACE
+                    instructions_space = 8 * 5 + 10  # 8 instructions * 5px + header
+                    if pdf.get_y() + instructions_space > 270:
+                        pdf.add_page()
+                        pdf.set_font('Helvetica', 'B', 11)
+                        pdf.set_text_color(*self.primary_color)
+                        pdf.cell(0, 6, 'MAP USAGE INSTRUCTIONS', 0, 1, 'C')
+                        pdf.ln(3)
+                    
                     pdf.ln(10)
                     pdf.set_font('Helvetica', 'B', 10)
                     pdf.set_text_color(*self.warning_color)
@@ -2560,6 +2554,15 @@ class PDFGenerator:
                     pdf.set_font('Helvetica', '', 8)
                     pdf.set_text_color(0, 0, 0)
                     for instruction in instructions:
+                        # Check space for each instruction
+                        if pdf.get_y() + 5 > 280:
+                            pdf.add_page()
+                            pdf.set_font('Helvetica', 'B', 10)
+                            pdf.set_text_color(*self.warning_color)
+                            pdf.cell(0, 6, 'MAP USAGE INSTRUCTIONS (CONTINUED):', 0, 1, 'L')
+                            pdf.set_font('Helvetica', '', 8)
+                            pdf.set_text_color(0, 0, 0)
+                        
                         pdf.cell(0, 4, instruction, 0, 1, 'L')
                     
                 except Exception as e:
@@ -2595,6 +2598,114 @@ class PDFGenerator:
             pdf.set_text_color(0, 0, 0)
             for item in troubleshooting:
                 pdf.cell(0, 6, item, 0, 1, 'L')
+    def _render_legend_table_with_page_check(self, pdf: 'EnhancedRoutePDF', table_data: list, col_widths: list, x_start: int, header_color: tuple):
+        """FIXED: Proper table rendering with automatic page break handling"""
+        
+        total_rows = len(table_data)
+        row_height = 6
+        header_height = 7
+        
+        # Check if entire table fits on current page
+        total_height_needed = header_height + (total_rows - 1) * row_height
+        
+        if pdf.get_y() + total_height_needed > 270:
+            # Split table or move to new page
+            if total_rows > 8:  # If table is large, split it
+                # Render first part
+                first_part = table_data[:5]  # Header + 4 data rows
+                self._render_legend_table(pdf, first_part, col_widths, x_start, header_color)
+                
+                # Start new page for second part
+                pdf.add_page()
+                pdf.set_font('Helvetica', 'B', 11)
+                pdf.set_text_color(*self.primary_color)
+                pdf.cell(0, 6, 'SERVICES & FACILITIES MARKERS (CONTINUED)', 0, 1, 'C')
+                pdf.ln(3)
+                
+                # Render second part with header
+                second_part = [table_data[0]] + table_data[5:]  # Header + remaining rows
+                self._render_legend_table(pdf, second_part, col_widths, x_start, header_color)
+            else:
+                # Small table - move entire table to new page
+                pdf.add_page()
+                pdf.set_font('Helvetica', 'B', 11)
+                pdf.set_text_color(*self.primary_color)
+                pdf.cell(0, 6, 'MAP LEGEND & SYMBOL GUIDE (CONTINUED)', 0, 1, 'C')
+                pdf.ln(5)
+                
+                pdf.set_font('Helvetica', 'B', 10)
+                pdf.set_text_color(*self.info_color)
+                pdf.cell(0, 6, 'SERVICES & FACILITIES MARKERS:', 0, 1, 'L')
+                
+                self._render_legend_table(pdf, table_data, col_widths, x_start, header_color)
+        else:
+            # Table fits - render normally
+            self._render_legend_table(pdf, table_data, col_widths, x_start, header_color)
+    def _render_legend_table(self, pdf: 'EnhancedRoutePDF', table_data: list, col_widths: list, x_start: int, header_color: tuple):
+        """FIXED: Proper table rendering helper method"""
+        
+        # Header row
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.set_fill_color(*header_color)
+        pdf.set_text_color(0, 0, 0)
+        
+        # Draw header
+        y_pos = pdf.get_y()
+        for i, (header, width) in enumerate(zip(table_data[0], col_widths)):
+            pdf.set_xy(x_start + sum(col_widths[:i]), y_pos)
+            pdf.cell(width, 7, header, 1, 0, 'C', True)
+        
+        pdf.ln(7)  # Move to next row
+        
+        # Data rows
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_fill_color(255, 255, 255)
+        
+        for row in table_data[1:]:  # Skip header row
+            # Check if we need a page break during table rendering
+            if pdf.get_y() + 8 > 270:  # If next row won't fit
+                pdf.add_page()
+                pdf.set_font('Helvetica', 'B', 10)
+                pdf.set_text_color(*self.primary_color)
+                pdf.cell(0, 6, 'MAP LEGEND (CONTINUED)', 0, 1, 'C')
+                pdf.ln(3)
+                
+                # Re-draw header on new page
+                pdf.set_font('Helvetica', 'B', 8)
+                pdf.set_fill_color(*header_color)
+                pdf.set_text_color(0, 0, 0)
+                
+                y_pos = pdf.get_y()
+                for i, (header, width) in enumerate(zip(table_data[0], col_widths)):
+                    pdf.set_xy(x_start + sum(col_widths[:i]), y_pos)
+                    pdf.cell(width, 7, header, 1, 0, 'C', True)
+                
+                pdf.ln(7)
+                pdf.set_font('Helvetica', '', 8)
+                pdf.set_fill_color(255, 255, 255)
+            
+            y_pos = pdf.get_y()
+            
+            # Calculate height needed for this row
+            max_height = 6
+            for i, (cell, width) in enumerate(zip(row, col_widths)):
+                text_len = len(str(cell))
+                if text_len > width // 3:
+                    max_height = max(max_height, 8)
+            
+            # Draw each cell in the row
+            for i, (cell, width) in enumerate(zip(row, col_widths)):
+                pdf.set_xy(x_start + sum(col_widths[:i]), y_pos)
+                
+                # Clean text and truncate if needed
+                cell_text = self.clean_text_for_pdf(str(cell))
+                max_chars = max(width // 3, 8)
+                if len(cell_text) > max_chars:
+                    cell_text = cell_text[:max_chars-3] + '...'
+                
+                pdf.cell(width, max_height, cell_text, 1, 0, 'L', True)
+            
+            pdf.ln(max_height)  # Move to next row
 
     
     def _add_images_summary_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
