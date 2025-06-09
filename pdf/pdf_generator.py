@@ -1,12 +1,13 @@
-# pdf/pdf_generator.py - Modular PDF Generator for Route Analysis System
-# Purpose: Generate PDF reports page by page from database data with exact look and feel
-# Dependencies: fpdf2, PIL, requests, matplotlib
-# Author: Route Analysis System
+# pdf/pdf_generator.py - Complete Full PDF Generator with Unicode Fixes
+# Purpose: Generate comprehensive PDF reports using database data and stored images
+# Dependencies: fpdf2, PIL, sqlite3, os, matplotlib
+# Author: Route Analysis System - Complete Version with Unicode Handling
 # Created: 2024
 
 import os
 import datetime
 import json
+import sqlite3
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
@@ -15,20 +16,25 @@ try:
     import matplotlib.pyplot as plt
     import matplotlib.patches as mpatches
     from PIL import Image
-    import requests
-    import io
     import tempfile
+    import numpy as np
 except ImportError as e:
     print(f"Warning: PDF dependencies not fully available: {e}")
-    print("Install with: pip install fpdf2 matplotlib pillow requests")
+    print("Install with: pip install fpdf2 matplotlib pillow numpy")
 
 class PDFGenerator:
-    """Modular PDF generator with page-based generation from database"""
+    """Complete comprehensive PDF generator with Unicode handling"""
     
     def __init__(self, db_manager):
         self.db_manager = db_manager
         
-        # HPCL color scheme (matching original)
+        # Image directories
+        self.image_base_path = "images"
+        self.maps_path = os.path.join(self.image_base_path, "maps")
+        self.satellite_path = os.path.join(self.image_base_path, "satellite")
+        self.street_view_path = os.path.join(self.image_base_path, "street_view")
+        
+        # HPCL color scheme
         self.primary_color = (0, 82, 147)      # HPCL Blue
         self.secondary_color = (60, 60, 60)    # Dark Gray
         self.danger_color = (220, 53, 69)      # Red
@@ -40,27 +46,234 @@ class PDFGenerator:
         self.available_pages = {
             'title': 'Title Page',
             'overview': 'Route Overview',
-            'turns': 'Sharp Turns Analysis',
+            'turns': 'Sharp Turns Analysis with Images',
             'pois': 'Points of Interest',
             'network': 'Network Coverage',
             'weather': 'Weather Analysis', 
             'compliance': 'Regulatory Compliance',
             'elevation': 'Elevation Analysis',
             'emergency': 'Emergency Planning',
+            'route_map': 'Route Map with Critical Points',
+            'images_summary': 'Images Summary',
+            'traffic': 'Traffic Analysis',
             'api_status': 'API Status Report'
         }
+        
+        print(f"✅ Complete PDF Generator initialized with {len(self.available_pages)} page types")
+        print(f"📁 Images directory: {self.image_base_path}")
+        self._verify_image_directories()
+
+    def clean_text_for_pdf(self, text: str) -> str:
+        """
+        Clean text to remove Unicode characters that FPDF can't handle
+        """
+        # Dictionary of Unicode replacements with PDF-safe alternatives
+        unicode_replacements = {
+            # Icons and symbols - CRITICAL FIXES
+            '✅': '[OK]',     # Check mark
+            '✓': '[OK]',     # Checkmark
+            '✗': '[X]',      # X mark
+            '⚠': '[!]',      # Warning symbol
+            '📄': '',        # Page icon
+            '📋': '',        # Clipboard
+            '📁': '',        # Folder
+            '📸': '',        # Camera
+            '📊': '',        # Chart
+            '❌': '[ERROR]', # Red X
+            '⛔': '[STOP]',  # Stop sign
+            
+            # Mathematical symbols
+            '≥': '>=',      # Greater than or equal to
+            '≤': '<=',      # Less than or equal to
+            '°': ' deg',    # Degree symbol - CRITICAL FIX
+            '→': '->',      # Right arrow
+            '←': '<-',      # Left arrow
+            '↑': '^',       # Up arrow
+            '↓': 'v',       # Down arrow
+            '•': '*',       # Bullet point
+            '–': '-',       # En dash
+            '—': '--',      # Em dash
+            '"': '"',       # Left double quote
+            '"': '"',       # Right double quote
+            ''': "'",       # Left single quote
+            ''': "'",       # Right single quote
+            '…': '...',     # Ellipsis
+            '×': 'x',       # Multiplication sign
+            '÷': '/',       # Division sign
+            '±': '+/-',     # Plus-minus sign
+            '√': 'sqrt',    # Square root
+            '∞': 'infinity', # Infinity
+            '∑': 'sum',     # Summation
+            '∆': 'delta',   # Delta
+            '∇': 'nabla',   # Nabla
+            '∂': 'd',       # Partial derivative
+            '∫': 'integral', # Integral
+            '∏': 'product', # Product
+            '∪': 'union',   # Union
+            '∩': 'intersection', # Intersection
+            '∈': 'in',      # Element of
+            '∉': 'not in',  # Not element of
+            '⊂': 'subset',  # Subset
+            '⊃': 'superset', # Superset
+            '⊆': 'subset or equal', # Subset or equal
+            '⊇': 'superset or equal', # Superset or equal
+            '∀': 'for all', # For all
+            '∃': 'exists',  # There exists
+            '∄': 'not exists', # Does not exist
+            '∧': 'and',     # Logical and
+            '∨': 'or',      # Logical or
+            '¬': 'not',     # Logical not
+            '⇒': '=>',      # Implies
+            '⇔': '<=>',     # If and only if
+            '≠': '!=',      # Not equal
+            '≈': '~=',      # Approximately equal
+            '≡': '===',     # Identical to
+            '∝': 'proportional to', # Proportional to
+            '∼': '~',       # Similar to
+            '∠': 'angle',   # Angle
+            '⊥': 'perpendicular', # Perpendicular
+            '∥': 'parallel', # Parallel
+            '⊙': 'circle dot', # Circle with dot
+            '⊕': 'circle plus', # Circle with plus
+            '⊗': 'circle times', # Circle with times
+            '⊘': 'circle slash', # Circle with slash
+            
+            # Currency and special characters
+            '℃': 'C',       # Celsius
+            '℉': 'F',       # Fahrenheit
+            '€': 'EUR',     # Euro
+            '£': 'GBP',     # Pound
+            '¥': 'JPY',     # Yen
+            '₹': 'INR',     # Indian Rupee
+            '©': '(c)',     # Copyright
+            '®': '(R)',     # Registered trademark
+            '™': '(TM)',    # Trademark
+            '§': 'section', # Section sign
+            '¶': 'paragraph', # Paragraph sign
+            '†': '+',       # Dagger
+            '‡': '++',      # Double dagger
+            '‰': 'per mille', # Per mille
+            '‱': 'per ten thousand', # Per ten thousand
+            '′': "'",       # Prime
+            '″': '"',       # Double prime
+            '‴': "'''",     # Triple prime
+            '※': 'note',    # Reference mark
+            '‼': '!!',      # Double exclamation
+            '⁇': '??',      # Double question
+            '⁈': '?!',      # Question exclamation
+            '⁉': '!?',      # Exclamation question
+            
+            # Superscripts and subscripts
+            '⁰': '^0', '¹': '^1', '²': '^2', '³': '^3', '⁴': '^4',
+            '⁵': '^5', '⁶': '^6', '⁷': '^7', '⁸': '^8', '⁹': '^9',
+            '₀': '_0', '₁': '_1', '₂': '_2', '₃': '_3', '₄': '_4',
+            '₅': '_5', '₆': '_6', '₇': '_7', '₈': '_8', '₉': '_9',
+            
+            # Greek letters (common ones)
+            'α': 'alpha', 'β': 'beta', 'γ': 'gamma', 'δ': 'delta',
+            'ε': 'epsilon', 'ζ': 'zeta', 'η': 'eta', 'θ': 'theta',
+            'ι': 'iota', 'κ': 'kappa', 'λ': 'lambda', 'μ': 'mu',
+            'ν': 'nu', 'ξ': 'xi', 'ο': 'omicron', 'π': 'pi',
+            'ρ': 'rho', 'σ': 'sigma', 'τ': 'tau', 'υ': 'upsilon',
+            'φ': 'phi', 'χ': 'chi', 'ψ': 'psi', 'ω': 'omega',
+            'Α': 'Alpha', 'Β': 'Beta', 'Γ': 'Gamma', 'Δ': 'Delta',
+            'Ε': 'Epsilon', 'Ζ': 'Zeta', 'Η': 'Eta', 'Θ': 'Theta',
+            'Ι': 'Iota', 'Κ': 'Kappa', 'Λ': 'Lambda', 'Μ': 'Mu',
+            'Ν': 'Nu', 'Ξ': 'Xi', 'Ο': 'Omicron', 'Π': 'Pi',
+            'Ρ': 'Rho', 'Σ': 'Sigma', 'Τ': 'Tau', 'Υ': 'Upsilon',
+            'Φ': 'Phi', 'Χ': 'Chi', 'Ψ': 'Psi', 'Ω': 'Omega'
+        }
+        
+        # Apply replacements
+        cleaned_text = str(text)
+        for unicode_char, replacement in unicode_replacements.items():
+            cleaned_text = cleaned_text.replace(unicode_char, replacement)
+        
+        # Remove any remaining non-ASCII characters
+        cleaned_text = ''.join(char if ord(char) < 128 else '?' for char in cleaned_text)
+        
+        return cleaned_text
+
+    def _verify_image_directories(self):
+        """Verify and create image directories"""
+        directories = [self.maps_path, self.satellite_path, self.street_view_path]
+        for dir_path in directories:
+            if os.path.exists(dir_path):
+                image_count = len([f for f in os.listdir(dir_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+                print(f"Found {image_count} images in {dir_path}")
+            else:
+                print(f"Directory not found - creating: {dir_path}")
+                os.makedirs(dir_path, exist_ok=True)
+                print(f"Created directory: {dir_path}")
+    
+    def get_stored_images_from_db(self, route_id: str, image_type: str = None) -> List[Dict]:
+        """Get stored images information from database"""
+        try:
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                if image_type:
+                    cursor.execute("""
+                        SELECT * FROM stored_images 
+                        WHERE route_id = ? AND image_type = ?
+                        ORDER BY created_at
+                    """, (route_id, image_type))
+                else:
+                    cursor.execute("""
+                        SELECT * FROM stored_images 
+                        WHERE route_id = ?
+                        ORDER BY image_type, created_at
+                    """, (route_id,))
+                
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Error getting stored images from DB: {e}")
+            return []
+    
+    def get_turns_with_images(self, route_id: str) -> List[Dict]:
+        """Get sharp turns data with associated images from database"""
+        try:
+            # Get sharp turns
+            sharp_turns = []
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM sharp_turns 
+                    WHERE route_id = ? 
+                    ORDER BY angle DESC
+                """, (route_id,))
+                sharp_turns = [dict(row) for row in cursor.fetchall()]
+            
+            # Get all stored images for this route
+            all_images = self.get_stored_images_from_db(route_id)
+            
+            # Associate images with turns based on GPS proximity
+            for turn in sharp_turns:
+                turn['street_view_images'] = []
+                turn['satellite_images'] = []
+                
+                for img in all_images:
+                    if img['latitude'] and img['longitude']:
+                        # Check if image is close to turn location (within ~100m)
+                        lat_diff = abs(float(img['latitude']) - float(turn['latitude']))
+                        lng_diff = abs(float(img['longitude']) - float(turn['longitude']))
+                        
+                        if lat_diff < 0.001 and lng_diff < 0.001:  # Approximately 100m
+                            if img['image_type'] == 'street_view':
+                                turn['street_view_images'].append(img)
+                            elif img['image_type'] == 'satellite':
+                                turn['satellite_images'].append(img)
+            
+            return sharp_turns
+            
+        except Exception as e:
+            print(f"Error getting turns with images: {e}")
+            return []
     
     def generate_route_pdf(self, route_id: str, pages: str = 'all') -> Optional[str]:
-        """
-        Generate PDF report for specific route with selected pages
-        
-        Args:
-            route_id: Route identifier
-            pages: Comma-separated page names or 'all'
-        
-        Returns:
-            Path to generated PDF file or None if failed
-        """
+        """Generate comprehensive PDF report"""
         try:
             # Get route data
             route = self.db_manager.get_route(route_id)
@@ -73,17 +286,17 @@ class PDFGenerator:
                 requested_pages = list(self.available_pages.keys())
             else:
                 requested_pages = [p.strip() for p in pages.split(',')]
-                # Validate page names
                 requested_pages = [p for p in requested_pages if p in self.available_pages]
             
             if not requested_pages:
                 print("No valid pages requested")
                 return None
             
-            print(f"📄 Generating PDF for route {route_id} with pages: {', '.join(requested_pages)}")
+            print(f"Generating Complete PDF for route {route_id}")
+            print(f"Pages ({len(requested_pages)}): {', '.join(requested_pages)}")
             
-            # Create PDF
-            pdf = EnhancedRoutePDF()
+            # Create PDF with Unicode-safe class
+            pdf = EnhancedRoutePDF(self)
             
             # Generate each requested page
             for page_name in requested_pages:
@@ -94,7 +307,7 @@ class PDFGenerator:
                 elif page_name == 'overview':
                     self._add_overview_page(pdf, route_id)
                 elif page_name == 'turns':
-                    self._add_turns_page(pdf, route_id)
+                    self._add_enhanced_turns_page(pdf, route_id)
                 elif page_name == 'pois':
                     self._add_pois_page(pdf, route_id)
                 elif page_name == 'network':
@@ -107,29 +320,38 @@ class PDFGenerator:
                     self._add_elevation_page(pdf, route_id)
                 elif page_name == 'emergency':
                     self._add_emergency_page(pdf, route_id)
+                elif page_name == 'route_map':
+                    self._add_route_map_page(pdf, route_id)
+                elif page_name == 'images_summary':
+                    self._add_images_summary_page(pdf, route_id)
+                elif page_name == 'traffic':
+                    self._add_traffic_page(pdf, route_id)
                 elif page_name == 'api_status':
                     self._add_api_status_page(pdf, route_id)
             
             # Save PDF
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"route_analysis_{route_id}_{timestamp}.pdf"
+            filename = f"complete_route_analysis_{route_id}_{timestamp}.pdf"
             filepath = os.path.join('reports', filename)
             
             os.makedirs('reports', exist_ok=True)
             pdf.output(filepath)
             
-            print(f"✅ PDF generated successfully: {filepath}")
+            print(f"Complete PDF generated: {filepath}")
+            print(f"Total pages: {pdf.page_no()}")
             return filepath
             
         except Exception as e:
-            print(f"❌ PDF generation failed: {e}")
+            print(f"PDF generation failed: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _add_title_page(self, pdf: 'EnhancedRoutePDF', route: Dict):
-        """Add professional title page"""
+        """Add professional title page with HPCL branding"""
         pdf.add_page()
         
-        # Background
+        # Background gradient effect
         pdf.set_fill_color(245, 248, 252)
         pdf.rect(0, 0, 210, 297, 'F')
         
@@ -137,711 +359,1761 @@ class PDFGenerator:
         pdf.set_fill_color(*self.primary_color)
         pdf.rect(0, 0, 210, 90, 'F')
         
+        logo_path = os.path.join('static', 'images', 'Hindustan_Petroleum_Logo.svg.png')
+        if os.path.exists(logo_path):
+            try:
+                # Add the actual HPCL logo
+                pdf.image(logo_path, x=15, y=15, w=30, h=60)
+            except Exception as e:
+                print(f"Error loading HPCL logo: {e}")
+                # Fallback to placeholder if logo fails to load
+                pdf.set_fill_color(255, 255, 255)
+                pdf.rect(15, 15, 60, 30, 'F')
+                pdf.set_text_color(*self.primary_color)
+                pdf.set_font('Helvetica', 'B', 12)
+                pdf.set_xy(20, 25)
+                pdf.cell(50, 10, 'HPCL LOGO', 0, 0, 'C')
+        else:
+            # Fallback to placeholder if logo file not found
+            pdf.set_fill_color(255, 255, 255)
+            pdf.rect(15, 15, 60, 30, 'F')
+            pdf.set_text_color(*self.primary_color)
+            pdf.set_font('Helvetica', 'B', 12)
+            pdf.set_xy(20, 25)
+            pdf.cell(50, 10, 'HPCL LOGO', 0, 0, 'C')
+        
         # Title
-        pdf.set_font('Helvetica', 'B', 26)
+        pdf.set_font('Helvetica', 'B', 24)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_xy(20, 25)
-        pdf.cell(0, 15, 'HINDUSTAN PETROLEUM CORPORATION LIMITED', 0, 1, 'L')
+        pdf.set_xy(20, 50)
+        pdf.cell(0, 12, 'HINDUSTAN PETROLEUM CORPORATION LIMITED', 0, 1, 'L')
         
         pdf.set_font('Helvetica', '', 14)
-        pdf.set_xy(20, 45)
-        pdf.cell(0, 8, 'Journey Risk Management Division', 0, 1, 'L')
+        pdf.set_xy(20, 65)
+        pdf.cell(0, 8, 'Journey Risk Management Division - AI-Powered Analysis', 0, 1, 'L')
         
-        # Route information
+        # Main title section
         pdf.set_xy(20, 110)
-        pdf.set_font('Helvetica', 'B', 20)
+        pdf.set_font('Helvetica', 'B', 22)
         pdf.set_text_color(*self.primary_color)
-        pdf.cell(0, 12, 'JOURNEY RISK MANAGEMENT (JRM) STUDY', 0, 1, 'C')
-        pdf.cell(0, 12, 'USING ARTIFICIAL INTELLIGENCE (AI)', 0, 1, 'C')
+        pdf.cell(0, 15, 'COMPREHENSIVE JOURNEY RISK MANAGEMENT', 0, 1, 'C')
+        pdf.cell(0, 15, 'ANALYSIS REPORT', 0, 1, 'C')
+        
+        pdf.set_font('Helvetica', '', 16)
+        pdf.set_text_color(*self.secondary_color)
+        pdf.cell(0, 10, 'Enhanced with Artificial Intelligence & Visual Evidence', 0, 1, 'C')
         
         # Route details box
         pdf.set_xy(25, 175)
         pdf.set_fill_color(255, 255, 255)
         pdf.set_draw_color(*self.primary_color)
+        pdf.set_line_width(2)
         pdf.rect(25, 175, 160, 100, 'DF')
         
         pdf.set_font('Helvetica', 'B', 16)
         pdf.set_text_color(*self.primary_color)
         pdf.set_xy(35, 185)
-        pdf.cell(0, 10, 'ROUTE ANALYSIS REPORT', 0, 1, 'L')
+        pdf.cell(0, 10, 'ROUTE ANALYSIS DETAILS', 0, 1, 'L')
         
-        # Route details
+        # Route information
         pdf.set_font('Helvetica', '', 12)
         pdf.set_text_color(60, 60, 60)
         
         details = [
-            f"Route ID: {route['id'][:8]}...",
-            f"From: {route.get('from_address', 'Unknown')[:50]}...",
-            f"To: {route.get('to_address', 'Unknown')[:50]}...",
-            f"Distance: {route.get('distance', 'Unknown')}",
-            f"Duration: {route.get('duration', 'Unknown')}",
-            f"Generated: {datetime.datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
+            f"Route ID: {route['id'][:12]}...",
+            f"Origin: {route.get('from_address', 'Unknown Location')[:45]}",
+            f"Destination: {route.get('to_address', 'Unknown Location')[:45]}",
+            f"Total Distance: {route.get('distance', 'Unknown')}",
+            f"Estimated Duration: {route.get('duration', 'Unknown')}",
+            f"Analysis Date: {datetime.datetime.now().strftime('%B %d, %Y')}",
+            f"Report Generated: {datetime.datetime.now().strftime('%I:%M %p')}"
         ]
         
         y_pos = 205
         for detail in details:
             pdf.set_xy(35, y_pos)
             pdf.cell(0, 8, detail, 0, 1, 'L')
-            y_pos += 10
+            y_pos += 9
+        
+        # Footer note
+        pdf.set_xy(25, 285)
+        pdf.set_font('Helvetica', 'I', 10)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 5, 'This report contains comprehensive analysis including visual evidence and AI-powered insights', 0, 0, 'C')
     
     def _add_overview_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add route overview page"""
+        """Add comprehensive route overview page"""
         from api.route_api import RouteAPI
         route_api = RouteAPI(self.db_manager, None)
         overview_data = route_api.get_route_overview(route_id)
         
         if 'error' in overview_data:
+            pdf.add_page()
+            pdf.add_section_header("ROUTE OVERVIEW & STATISTICS", "primary")
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'Route overview data not available.', 0, 1, 'L')
             return
         
         pdf.add_page()
-        pdf.add_section_header("ROUTE OVERVIEW & STATISTICS", "primary")
+        pdf.add_section_header("COMPREHENSIVE ROUTE OVERVIEW & STATISTICS", "primary")
         
         # Route information
         route_info = overview_data['route_info']
         stats = overview_data['statistics']
         
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, 'ROUTE INFORMATION', 0, 1, 'L')
+        # Basic route information
+        pdf.set_font('Helvetica', 'B', 14)
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 10, 'ROUTE INFORMATION', 0, 1, 'L')
         
         route_table = [
-            ['From Address', route_info.get('from_address', 'Unknown')[:60]],
-            ['To Address', route_info.get('to_address', 'Unknown')[:60]],
+            ['From Address', route_info.get('from_address', 'Unknown')[:55]],
+            ['To Address', route_info.get('to_address', 'Unknown')[:55]],
             ['Total Distance', route_info.get('distance', 'Unknown')],
             ['Estimated Duration', route_info.get('duration', 'Unknown')],
-            ['Route Points Analyzed', str(stats['total_points'])],
-            ['Analysis Date', route_info.get('created_at', '')[:19]],
-            ['Overall Safety Score', f"{stats['safety_score']}/100 - {stats['safety_rating']}"]
+            ['Route Points Analyzed', f"{stats['total_points']:,}"],
+            ['Analysis Timestamp', route_info.get('created_at', '')[:19]],
+            ['Overall Safety Score', f"{stats['safety_score']}/100 ({stats['safety_rating']})"]
         ]
         
-        pdf.create_simple_table(route_table, [60, 120])
+        pdf.create_detailed_table(route_table, [70, 110])
         
-        # Hazard statistics
-        pdf.ln(10)
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, 'HAZARD ANALYSIS SUMMARY', 0, 1, 'L')
+        # Hazard analysis summary
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 14)
+        pdf.set_text_color(*self.danger_color)
+        pdf.cell(0, 10, 'HAZARD ANALYSIS SUMMARY', 0, 1, 'L')
         
         hazard_table = [
-            ['Total Sharp Turns', str(stats['total_sharp_turns'])],
-            ['Extreme Turns (>90°)', str(stats['extreme_turns'])],
-            ['Blind Spots (80-90°)', str(stats['blind_spots'])],
-            ['Sharp Danger (70-80°)', str(stats['sharp_danger'])],
-            ['Moderate Turns (45-70°)', str(stats['moderate_turns'])],
-            ['Network Dead Zones', str(stats['dead_zones'])],
-            ['Poor Coverage Areas', str(stats['poor_coverage_zones'])]
+            ['Total Sharp Turns Identified', f"{stats['total_sharp_turns']:,}"],
+            ['Extreme Turns (>=90 deg)', f"{stats['extreme_turns']:,}"],
+            ['High-Risk Blind Spots (80-90 deg)', f"{stats['blind_spots']:,}"],
+            ['Sharp Danger Zones (70-80 deg)', f"{stats['sharp_danger']:,}"],
+            ['Moderate Turns (45-70 deg)', f"{stats['moderate_turns']:,}"],
+            ['Network Dead Zones', f"{stats['dead_zones']:,}"],
+            ['Poor Coverage Areas', f"{stats['poor_coverage_zones']:,}"]
         ]
         
-        pdf.create_simple_table(hazard_table, [60, 120])
+        pdf.create_detailed_table(hazard_table, [70, 110])
         
-        # Safety assessment
-        pdf.ln(10)
+        # Safety assessment with visual indicator
+        pdf.ln(15)
         safety_score = stats['safety_score']
         if safety_score >= 80:
             color = self.success_color
-            status = "SAFE"
+            status = "SAFE ROUTE"
+            icon = "[OK]"
         elif safety_score >= 60:
             color = self.warning_color
             status = "MODERATE RISK"
+            icon = "[!]"
         else:
             color = self.danger_color
             status = "HIGH RISK"
+            icon = "[!]"
         
         pdf.set_fill_color(*color)
-        pdf.rect(10, pdf.get_y(), 190, 15, 'F')
+        pdf.rect(10, pdf.get_y(), 190, 20, 'F')
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font('Helvetica', 'B', 14)
-        pdf.set_xy(15, pdf.get_y() + 3)
-        pdf.cell(180, 9, f'OVERALL SAFETY ASSESSMENT: {status} (Score: {safety_score}/100)', 0, 1, 'C')
-    
-    def _add_turns_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add sharp turns analysis page"""
-        from api.route_api import RouteAPI
-        route_api = RouteAPI(self.db_manager, None)
-        turns_data = route_api.get_sharp_turns(route_id)
+        pdf.set_font('Helvetica', 'B', 16)
+        pdf.set_xy(15, pdf.get_y() + 5)
+        safety_text = f'{icon} OVERALL SAFETY ASSESSMENT: {status} (Score: {safety_score}/100)'
+        pdf.cell(180, 10, safety_text, 0, 1, 'C')
         
-        if 'error' in turns_data:
+        # Risk factors breakdown
+        pdf.add_page()  # <-- ADD THIS LINE
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.cell(0, 8, 'IDENTIFIED RISK FACTORS', 0, 1, 'L')
+        
+        risk_factors = []
+        if stats['extreme_turns'] > 0:
+            risk_factors.append(f"* {stats['extreme_turns']} extreme turns requiring extreme caution")
+        if stats['blind_spots'] > 0:
+            risk_factors.append(f"* {stats['blind_spots']} blind spot areas with limited visibility")
+        if stats['dead_zones'] > 0:
+            risk_factors.append(f"* {stats['dead_zones']} communication dead zones")
+        if stats['poor_coverage_zones'] > 0:
+            risk_factors.append(f"* {stats['poor_coverage_zones']} areas with poor network coverage")
+        
+        if not risk_factors:
+            risk_factors.append("* No significant risk factors identified")
+        
+        pdf.set_font('Helvetica', '', 10)
+        for factor in risk_factors:
+            pdf.cell(0, 6, factor, 0, 1, 'L')
+        
+        # Recommendations
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.info_color)
+        pdf.cell(0, 8, 'SAFETY RECOMMENDATIONS', 0, 1, 'L')
+        
+        recommendations = [
+            "* Reduce speed at identified sharp turns and blind spots",
+            "* Maintain extra distance from other vehicles in risk areas",
+            "* Ensure vehicle is in optimal condition before journey",
+            "* Carry emergency communication devices for dead zones",
+            "* Plan rest stops at safe locations identified in the route",
+            "* Monitor weather conditions before and during travel"
+        ]
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for rec in recommendations:
+            pdf.cell(0, 6, rec, 0, 1, 'L')
+    
+    def _add_enhanced_turns_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
+        """Add comprehensive sharp turns analysis page with visual evidence"""
+        
+        # Get turns data with images
+        turns_data = self.get_turns_with_images(route_id)
+        
+        if not turns_data:
+            pdf.add_page()
+            pdf.add_section_header("SHARP TURNS ANALYSIS WITH VISUAL EVIDENCE", "danger")
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'No sharp turns data available for this route.', 0, 1, 'L')
             return
         
         pdf.add_page()
-        pdf.add_section_header("SHARP TURNS ANALYSIS", "danger")
+        pdf.add_section_header("SHARP TURNS ANALYSIS WITH VISUAL EVIDENCE", "danger")
         
-        # Summary statistics
-        summary = turns_data['summary']
+        # Comprehensive summary statistics
+        total_turns = len(turns_data)
+        extreme_turns = len([t for t in turns_data if t['angle'] >= 90])
+        blind_spots = len([t for t in turns_data if 80 <= t['angle'] < 90])
+        sharp_danger = len([t for t in turns_data if 70 <= t['angle'] < 80])
+        moderate_turns = len([t for t in turns_data if 45 <= t['angle'] < 70])
         
+        # Get stored images count
+        street_view_count = len(self.get_stored_images_from_db(route_id, 'street_view'))
+        satellite_count = len(self.get_stored_images_from_db(route_id, 'satellite'))
+        
+        # Calculate average angle
+        avg_angle = sum(t['angle'] for t in turns_data) / len(turns_data) if turns_data else 0
+        max_angle = max(t['angle'] for t in turns_data) if turns_data else 0
+        
+        # Detailed summary table
         stats_table = [
-            ['Total Sharp Turns', str(turns_data['total_turns'])],
-            ['Most Dangerous Angle', f"{summary['most_dangerous_angle']:.1f}°"],
-            ['Average Turn Angle', f"{summary['average_angle']:.1f}°"],
-            ['Critical Turns', str(summary['critical_turns_count'])],
-            ['Street View Images', str(turns_data['images_available']['street_view'])],
-            ['Satellite Images', str(turns_data['images_available']['satellite'])]
+            ['Total Sharp Turns Detected', f"{total_turns:,}"],
+            ['Extreme Danger Turns (>=90 deg)', f"{extreme_turns:,}"],
+            ['High-Risk Blind Spots (80-90 deg)', f"{blind_spots:,}"],
+            ['Sharp Danger Zones (70-80 deg)', f"{sharp_danger:,}"],
+            ['Moderate Risk Turns (45-70 deg)', f"{moderate_turns:,}"],
+            ['Most Dangerous Turn Angle', f"{max_angle:.1f} deg"],
+            ['Average Turn Angle', f"{avg_angle:.1f} deg"],
+            ['Street View Images Available', f"{street_view_count:,}"],
+            ['Satellite Images Available', f"{satellite_count:,}"]
         ]
         
-        pdf.create_simple_table(stats_table, [60, 120])
+        pdf.create_detailed_table(stats_table, [80, 100])
         
-        # Categorized turns table
-        pdf.ln(10)
+        # Turn classification legend
+        
         pdf.set_font('Helvetica', 'B', 12)
         pdf.set_text_color(*self.danger_color)
-        pdf.cell(0, 8, 'DANGEROUS TURNS BY CATEGORY', 0, 1, 'L')
+        pdf.cell(0, 8, 'TURN CLASSIFICATION SYSTEM', 0, 1, 'L')
         
-        categorized = turns_data['categorized_turns']
+        classification_table = [
+            ['>=90 deg', 'EXTREME BLIND SPOT', 'CRITICAL', '15 km/h', 'Full stop may be required'],
+            ['80-90 deg', 'HIGH-RISK BLIND SPOT', 'EXTREME', '20 km/h', 'Extreme caution required'],
+            ['70-80 deg', 'BLIND SPOT', 'HIGH', '25 km/h', 'High caution required'],
+            ['60-70 deg', 'HIGH-ANGLE TURN', 'MEDIUM', '30 km/h', 'Moderate caution required'],
+            ['45-60 deg', 'SHARP TURN', 'LOW', '40 km/h', 'Normal caution required']
+        ]
         
-        # Create table for all turns
-        headers = ['Turn #', 'Angle', 'Classification', 'Danger Level', 'Speed Limit', 'GPS Coordinates']
-        col_widths = [15, 20, 40, 25, 25, 60]
-        
+        headers = ['Angle Range', 'Classification', 'Risk Level', 'Max Speed', 'Safety Requirement']
+        col_widths = [25, 45, 25, 25, 65]
         pdf.create_table_header(headers, col_widths)
         
-        # Add turns by category (most dangerous first)
-        turn_number = 1
-        for category_name, turns in [
-            ('extreme_blind_spots', categorized['extreme_blind_spots']),
-            ('blind_spots', categorized['blind_spots']),
-            ('sharp_danger', categorized['sharp_danger']),
-            ('moderate_turns', categorized['moderate_turns'])
-        ]:
-            for turn in turns[:5]:  # Limit per category
-                if pdf.get_y() > 270:
-                    break
-                
-                row_data = [
-                    str(turn_number),
-                    f"{turn['angle']:.1f}°",
-                    turn['classification'],
-                    turn['danger_level'],
-                    f"{turn.get('recommended_speed', 40)} km/h",
-                    f"{turn['latitude']:.4f}, {turn['longitude']:.4f}"
-                ]
-                
-                pdf.create_table_row(row_data, col_widths)
-                turn_number += 1
+        for row in classification_table:
+            pdf.create_table_row(row, col_widths)
         
-        # Add stored images information
-        if turns_data['images_available']['street_view'] > 0:
-            pdf.ln(10)
-            pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(0, 8, 'STORED TURN IMAGES', 0, 1, 'L')
+        # Most critical turns with detailed analysis
+        pdf.add_page()  # <-- ADD THIS LINE
+        pdf.set_font('Helvetica', 'B', 14)
+        pdf.set_text_color(*self.danger_color)
+        pdf.cell(0, 8, 'CRITICAL TURNS REQUIRING IMMEDIATE ATTENTION', 0, 1, 'L')
+        
+        # Process top 8 most dangerous turns
+        critical_turns = sorted(turns_data, key=lambda x: x['angle'], reverse=True)[:8]
+        
+        for i, turn in enumerate(critical_turns, 1):
+            # if pdf.get_y() > 230:  # Check if we need a new page
+            #     pdf.add_page()
+            #     pdf.ln(10)
+            if i > 1:  # Don't add page for first turn
+                pdf.add_page()  # <-- ADD THIS LINE
             
-            # Get and display sample images
-            stored_images = self.db_manager.get_stored_images(route_id, 'street_view')
-            self._add_stored_images_info(pdf, stored_images[:5])
+            # Turn information header with enhanced styling
+            # pdf.ln(8)
+            pdf.set_fill_color(*self.danger_color)
+            pdf.rect(10, pdf.get_y(), 190, 12, 'F')
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font('Helvetica', 'B', 12)
+            pdf.set_xy(15, pdf.get_y() + 2)
+            turn_header = f'CRITICAL TURN #{i}: {turn["angle"]:.1f} deg - {turn["classification"]} - {turn["danger_level"]} RISK'
+            pdf.cell(180, 8, turn_header, 0, 1, 'L')
+            
+            # Detailed turn analysis
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font('Helvetica', '', 10)
+            
+            turn_details = [
+                ['GPS Coordinates', f'{turn["latitude"]:.6f}, {turn["longitude"]:.6f}'],
+                ['Turn Angle', f'{turn["angle"]:.1f} deg (Deviation from straight path)'],
+                ['Risk Classification', f'{turn["classification"]} - {turn["danger_level"]} Risk Level'],
+                ['Recommended Maximum Speed', f'{turn.get("recommended_speed", 40)} km/h'],
+                ['Safety Distance Required', 'Minimum 50m approach visibility'],
+                ['Driver Action Required', 'Reduce speed, check mirrors, signal early']
+            ]
+            
+            pdf.create_detailed_table(turn_details, [65, 115])
+            
+            # Add images if available with detailed captions
+            self._add_comprehensive_turn_images(pdf, turn, route_id, i)
+            
+            pdf.ln(5)
+    
+    def _add_comprehensive_turn_images(self, pdf: 'EnhancedRoutePDF', turn: Dict, route_id: str, turn_number: int):
+        """Add comprehensive turn images with detailed analysis"""
+        
+        # Get images for this turn
+        street_view_images = turn.get('street_view_images', [])
+        satellite_images = turn.get('satellite_images', [])
+        
+        if not street_view_images and not satellite_images:
+            pdf.set_font('Helvetica', 'I', 9)
+            pdf.set_text_color(150, 150, 150)
+            pdf.cell(0, 6, f'   No visual evidence available for Turn #{turn_number}', 0, 1, 'L')
+            pdf.set_font('Helvetica', '', 8)
+            pdf.cell(0, 5, f'   Images may be available at nearby coordinates: {turn["latitude"]:.4f}, {turn["longitude"]:.4f}', 0, 1, 'L')
+            return
+        
+        pdf.ln(3)
+        pdf.set_font('Helvetica', 'B', 11)
+        pdf.set_text_color(*self.info_color)
+        pdf.cell(0, 6, f'VISUAL EVIDENCE FOR TURN #{turn_number}:', 0, 1, 'L')
+        
+        current_y = pdf.get_y()
+        image_added = False
+        
+        # Add street view images with analysis
+        if street_view_images:
+            for img in street_view_images[:1]:  # One image per turn
+                image_path = img['file_path']
+                if os.path.exists(image_path):
+                    try:
+                        # Check if we have enough space
+                        if current_y + 80 > 280:
+                            pdf.add_page()
+                            current_y = pdf.get_y()
+                        
+                        # Image title
+                        pdf.set_xy(15, current_y)
+                        pdf.set_font('Helvetica', 'B', 9)
+                        pdf.set_text_color(*self.primary_color)
+                        pdf.cell(0, 5, 'STREET VIEW ANALYSIS:', 0, 1, 'L')
+                        current_y += 7
+                        
+                        # Add image to PDF
+                        pdf.set_xy(15, current_y)
+                        pdf.image(image_path, x=15, y=current_y, w=85, h=65)
+                        
+                        # Detailed image analysis (text beside image)
+                        pdf.set_xy(105, current_y)
+                        pdf.set_font('Helvetica', '', 8)
+                        pdf.set_text_color(0, 0, 0)
+                        
+                        analysis_text = [
+                            f"File: {os.path.basename(img['filename'])}",
+                            f"Size: {img.get('file_size', 0) / 1024:.1f} KB",
+                            f"Location: {img.get('latitude', 0):.4f}, {img.get('longitude', 0):.4f}",
+                            f"Captured: {img.get('created_at', 'Unknown')[:16]}",
+                            "",
+                            "ANALYSIS:",
+                            f"* Turn angle: {turn['angle']:.1f} deg",
+                            f"* Visibility: Limited due to sharp curve",
+                            f"* Road condition: Visual inspection required",
+                            f"* Hazard level: {turn['danger_level']}",
+                            f"* Recommended action: Reduce speed to {turn.get('recommended_speed', 40)} km/h"
+                        ]
+                        
+                        for line in analysis_text:
+                            pdf.cell(90, 4, line, 0, 1, 'L')
+                            pdf.set_x(105)
+                        
+                        current_y += 72
+                        image_added = True
+                        break
+                    except Exception as e:
+                        print(f"Error adding street view image: {e}")
+        
+        # Add satellite images if no street view
+        if satellite_images and not image_added:
+            for img in satellite_images[:1]:
+                image_path = img['file_path']
+                if os.path.exists(image_path):
+                    try:
+                        # Check if we have enough space
+                        if current_y + 80 > 280:
+                            pdf.add_page()
+                            current_y = pdf.get_y()
+                        
+                        # Image title
+                        pdf.set_xy(15, current_y)
+                        pdf.set_font('Helvetica', 'B', 9)
+                        pdf.set_text_color(*self.info_color)
+                        pdf.cell(0, 5, 'SATELLITE VIEW ANALYSIS:', 0, 1, 'L')
+                        current_y += 7
+                        
+                        # Add image
+                        pdf.set_xy(15, current_y)
+                        pdf.image(image_path, x=15, y=current_y, w=85, h=65)
+                        
+                        # Analysis text
+                        pdf.set_xy(105, current_y)
+                        pdf.set_font('Helvetica', '', 8)
+                        pdf.set_text_color(0, 0, 0)
+                        
+                        satellite_analysis = [
+                            f"File: {os.path.basename(img['filename'])}",
+                            f"Size: {img.get('file_size', 0) / 1024:.1f} KB",
+                            f"Location: {img.get('latitude', 0):.4f}, {img.get('longitude', 0):.4f}",
+                            "",
+                            "SATELLITE ANALYSIS:",
+                            f"* Turn geometry: {turn['angle']:.1f} deg deviation",
+                            f"* Road curvature: Sharp bend visible",
+                            f"* Surrounding terrain: Analysis from aerial view",
+                            f"* Traffic flow impact: Potential bottleneck",
+                            f"* Alternative routes: Check local road network"
+                        ]
+                        
+                        for line in satellite_analysis:
+                            pdf.cell(90, 4, line, 0, 1, 'L')
+                            pdf.set_x(105)
+                        
+                        current_y += 72
+                        image_added = True
+                        break
+                    except Exception as e:
+                        print(f"Error adding satellite image: {e}")
+        
+        if image_added:
+            pdf.set_y(current_y + 5)
+        else:
+            pdf.set_font('Helvetica', 'I', 9)
+            pdf.set_text_color(150, 150, 150)
+            pdf.cell(0, 6, f'   Image files not accessible from file system', 0, 1, 'L')
     
     def _add_pois_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add Points of Interest page"""
+        """Add comprehensive Points of Interest analysis"""
         from api.route_api import RouteAPI
         route_api = RouteAPI(self.db_manager, None)
         pois_data = route_api.get_points_of_interest(route_id)
         
         if 'error' in pois_data:
+            pdf.add_page()
+            pdf.add_section_header("POINTS OF INTEREST ANALYSIS", "info")
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'Points of Interest data not available.', 0, 1, 'L')
             return
         
         pdf.add_page()
-        pdf.add_section_header("POINTS OF INTEREST ALONG ROUTE", "info")
+        pdf.add_section_header("COMPREHENSIVE POINTS OF INTEREST ANALYSIS", "info")
         
         # POI Statistics
         stats = pois_data['statistics']
         
-        stats_table = [
-            ['Total POIs Found', str(stats['total_pois'])],
-            ['Emergency Services', str(stats['emergency_services'])],
-            ['Essential Services', str(stats['essential_services'])],
-            ['Other Services', str(stats['other_services'])],
+        # Summary statistics
+        summary_table = [
+            ['Total POIs Identified', f"{stats['total_pois']:,}"],
+            ['Emergency Services', f"{stats['emergency_services']:,}"],
+            ['Essential Services', f"{stats['essential_services']:,}"],
+            ['Other Services', f"{stats['other_services']:,}"],
             ['Coverage Score', f"{stats['coverage_score']}/100"],
-            ['Service Availability', 'GOOD' if stats['coverage_score'] > 70 else 'MODERATE' if stats['coverage_score'] > 40 else 'LIMITED']
+            ['Service Availability Rating', 'EXCELLENT' if stats['coverage_score'] > 80 else 'GOOD' if stats['coverage_score'] > 60 else 'MODERATE' if stats['coverage_score'] > 40 else 'LIMITED']
         ]
         
-        pdf.create_simple_table(stats_table, [60, 120])
+        pdf.create_detailed_table(summary_table, [70, 110])
         
-        # POI Categories
+        # Service availability assessment
+        pdf.ln(10)
+        coverage_score = stats['coverage_score']
+        if coverage_score >= 80:
+            color = self.success_color
+            status = "EXCELLENT SERVICE COVERAGE"
+        elif coverage_score >= 60:
+            color = self.info_color
+            status = "GOOD SERVICE COVERAGE"
+        elif coverage_score >= 40:
+            color = self.warning_color
+            status = "MODERATE SERVICE COVERAGE"
+        else:
+            color = self.danger_color
+            status = "LIMITED SERVICE COVERAGE"
+        
+        pdf.set_fill_color(*color)
+        pdf.rect(10, pdf.get_y(), 190, 12, 'F')
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_xy(15, pdf.get_y() + 2)
+        pdf.cell(180, 8, f'SERVICE AVAILABILITY: {status} ({coverage_score}/100)', 0, 1, 'C')
+        
+        # Detailed POI Categories
         pois = pois_data['pois_by_type']
         
         poi_categories = [
-            ('hospitals', 'HOSPITALS - Emergency Medical Services', self.danger_color),
-            ('gas_stations', 'FUEL STATIONS - Refueling Points', self.warning_color),
-            ('police', 'POLICE STATIONS - Security Services', self.primary_color),
-            ('fire_stations', 'FIRE STATIONS - Emergency Response', self.danger_color),
-            ('schools', 'SCHOOLS - Speed Limit Zones (40 km/h)', self.success_color),
-            ('restaurants', 'RESTAURANTS - Rest & Food Stops', self.info_color)
+            ('hospitals', 'MEDICAL FACILITIES - Emergency Healthcare Services', self.danger_color, 'CRITICAL'),
+            ('police', 'LAW ENFORCEMENT - Security & Emergency Response', self.primary_color, 'CRITICAL'),
+            ('fire_stations', 'FIRE & RESCUE - Emergency Response Services', self.danger_color, 'CRITICAL'),
+            ('gas_stations', 'FUEL STATIONS - Vehicle Refueling Points', self.warning_color, 'ESSENTIAL'),
+            ('schools', 'EDUCATIONAL INSTITUTIONS - Speed Limit Zones (40 km/h)', self.success_color, 'AWARENESS'),
+            ('restaurants', 'FOOD & REST - Meal Stops & Driver Rest Areas', self.info_color, 'CONVENIENCE')
         ]
         
-        for poi_type, title, color in poi_categories:
+        for poi_type, title, color, priority in poi_categories:
             poi_list = pois.get(poi_type, [])
-            if not poi_list:
-                continue
-            
-            pdf.ln(10)
+            pdf.add_page()  # <-- ADD THIS LINE
+            pdf.ln(15)
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(*color)
-            pdf.cell(0, 8, f'{title} ({len(poi_list)} found)', 0, 1, 'L')
+            pdf.cell(0, 8, f'{title} ({len(poi_list)} found) - {priority}', 0, 1, 'L')
             
-            # Create table for this POI type
-            headers = ['S.No', 'Name', 'Address', 'Distance Info']
-            col_widths = [15, 60, 70, 40]
+            if not poi_list:
+                pdf.set_font('Helvetica', 'I', 10)
+                pdf.set_text_color(150, 150, 150)
+                pdf.cell(0, 6, f'   No {poi_type.replace("_", " ")} found along this route', 0, 1, 'L')
+                continue
+            
+            # Create detailed table for this POI type
+            headers = ['#', 'Facility Name', 'Location/Address', 'Distance', 'Notes']
+            col_widths = [15, 55, 65, 25, 25]
             
             pdf.create_table_header(headers, col_widths)
             
-            for i, poi in enumerate(poi_list[:10], 1):  # Limit to 10 per type
+            for i, poi in enumerate(poi_list[:15], 1):  # Limit to 15 per type
+                notes = ""
+                if poi_type == 'schools':
+                    notes = "40 km/h"
+                elif poi_type == 'hospitals':
+                    notes = "Emergency"
+                elif poi_type == 'gas_stations':
+                    notes = "Fuel"
+                
                 row_data = [
                     str(i),
-                    poi.get('name', 'Unknown')[:25],
-                    poi.get('address', 'Unknown location')[:30],
-                    f"Along route"
+                    poi.get('name', 'Unknown')[:28],
+                    poi.get('address', 'Unknown location')[:32],
+                    "Along route",
+                    notes
                 ]
                 
                 pdf.create_table_row(row_data, col_widths)
         
-        # Recommendations
+        # Service recommendations
         recommendations = pois_data.get('recommendations', [])
         if recommendations:
-            pdf.ln(10)
+            pdf.ln(15)
             pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(0, 8, 'POI RECOMMENDATIONS', 0, 1, 'L')
+            pdf.set_text_color(*self.primary_color)
+            pdf.cell(0, 8, 'SERVICE AVAILABILITY RECOMMENDATIONS', 0, 1, 'L')
             
             pdf.set_font('Helvetica', '', 10)
+            pdf.set_text_color(0, 0, 0)
             for i, rec in enumerate(recommendations, 1):
                 pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-                pdf.multi_cell(170, 6, rec, 0, 'L')
+                pdf.multi_cell(172, 6, rec, 0, 'L')
                 pdf.ln(2)
+        
+        # Critical service gaps analysis
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.danger_color)
+        pdf.cell(0, 8, 'CRITICAL SERVICE GAPS IDENTIFIED', 0, 1, 'L')
+        
+        gaps = []
+        if len(pois.get('hospitals', [])) == 0:
+            gaps.append("* No medical facilities - Carry first aid kit and emergency contact numbers")
+        if len(pois.get('gas_stations', [])) < 2:
+            gaps.append("* Limited fuel stations - Plan refueling stops and carry extra fuel if possible")
+        if len(pois.get('police', [])) == 0:
+            gaps.append("* No police stations - Save emergency numbers: 100 (Police), 112 (Emergency)")
+        
+        if not gaps:
+            gaps.append("* No critical service gaps identified - Good service coverage along route")
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for gap in gaps:
+            pdf.cell(0, 6, gap, 0, 1, 'L')
     
     def _add_network_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add network coverage analysis page"""
+        """Add comprehensive network coverage analysis"""
         from api.route_api import RouteAPI
         route_api = RouteAPI(self.db_manager, None)
         network_data = route_api.get_network_coverage(route_id)
         
         if 'error' in network_data:
+            pdf.add_page()
+            pdf.add_section_header("NETWORK COVERAGE ANALYSIS", "info")
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'Network coverage data not available.', 0, 1, 'L')
             return
         
         pdf.add_page()
-        pdf.add_section_header("NETWORK COVERAGE ANALYSIS", "info")
+        pdf.add_section_header("COMPREHENSIVE NETWORK COVERAGE ANALYSIS", "info")
         
         # Network Statistics
         stats = network_data['statistics']
         
-        stats_table = [
-            ['Points Analyzed', str(stats['total_points_analyzed'])],
-            ['Overall Coverage Score', f"{stats['overall_coverage_score']}/100"],
-            ['Dead Zones', str(stats['dead_zones_count'])],
-            ['Poor Coverage Areas', str(stats['poor_coverage_count'])],
-            ['Good Coverage', f"{stats['good_coverage_percentage']}%"],
-            ['Network Reliability', 'HIGH' if stats['overall_coverage_score'] > 80 else 'MEDIUM' if stats['overall_coverage_score'] > 60 else 'LOW']
+        # Overall coverage assessment
+        overall_score = stats['overall_coverage_score']
+        if overall_score >= 85:
+            coverage_status = "EXCELLENT"
+            coverage_color = self.success_color
+        elif overall_score >= 70:
+            coverage_status = "GOOD"
+            coverage_color = self.info_color
+        elif overall_score >= 50:
+            coverage_status = "MODERATE"
+            coverage_color = self.warning_color
+        else:
+            coverage_status = "POOR"
+            coverage_color = self.danger_color
+        
+        # Coverage summary
+        summary_table = [
+            ['Analysis Points Tested', f"{stats['total_points_analyzed']:,}"],
+            ['Overall Coverage Score', f"{stats['overall_coverage_score']:.1f}/100"],
+            ['Coverage Status', coverage_status],
+            ['Dead Zones Identified', f"{stats['dead_zones_count']:,}"],
+            ['Poor Coverage Areas', f"{stats['poor_coverage_count']:,}"],
+            ['Good Coverage Areas', f"{stats['good_coverage_percentage']:.1f}%"],
+            ['Network Reliability Rating', 'HIGH' if stats['overall_coverage_score'] > 80 else 'MEDIUM' if stats['overall_coverage_score'] > 60 else 'LOW']
         ]
         
-        pdf.create_simple_table(stats_table, [60, 120])
+        pdf.create_detailed_table(summary_table, [70, 110])
         
-        # Quality Distribution
+        # Coverage status indicator
         pdf.ln(10)
+        pdf.set_fill_color(*coverage_color)
+        pdf.rect(10, pdf.get_y(), 190, 12, 'F')
+        pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, 'COVERAGE QUALITY DISTRIBUTION', 0, 1, 'L')
+        pdf.set_xy(15, pdf.get_y() + 2)
+        pdf.cell(180, 8, f'NETWORK RELIABILITY: {coverage_status} ({overall_score:.1f}/100)', 0, 1, 'C')
+        
+        # Quality Distribution Analysis
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'SIGNAL QUALITY DISTRIBUTION ANALYSIS', 0, 1, 'L')
         
         quality_dist = network_data['quality_distribution']
-        quality_table = []
+        total_points = stats['total_points_analyzed']
         
+        quality_table = []
         quality_colors = {
-            'excellent': 'Excellent (Strong Signal)',
-            'good': 'Good (Reliable Signal)',
-            'fair': 'Fair (Adequate Signal)',
-            'poor': 'Poor (Weak Signal)',
-            'dead': 'Dead Zone (No Signal)'
+            'excellent': ('Excellent Signal (4-5 bars)', self.success_color),
+            'good': ('Good Signal (3-4 bars)', self.info_color), 
+            'fair': ('Fair Signal (2-3 bars)', self.warning_color),
+            'poor': ('Poor Signal (1-2 bars)', self.warning_color),
+            'dead': ('No Signal (Dead Zone)', self.danger_color)
         }
         
         for quality, count in quality_dist.items():
+            percentage = (count/total_points*100) if total_points > 0 else 0
+            quality_name, color = quality_colors.get(quality, (quality.title(), self.secondary_color))
+            
             quality_table.append([
-                quality_colors.get(quality, quality.title()),
-                str(count),
-                f"{(count/stats['total_points_analyzed']*100):.1f}%" if stats['total_points_analyzed'] > 0 else "0%"
+                quality_name,
+                f"{count:,}",
+                f"{percentage:.1f}%",
+                "Critical" if quality == 'dead' else "Attention" if quality == 'poor' else "Good"
             ])
         
-        headers = ['Coverage Quality', 'Points', 'Percentage']
-        col_widths = [60, 30, 30]
+        headers = ['Signal Quality Level', 'Points Count', 'Route %', 'Status']
+        col_widths = [60, 30, 25, 25]
         
         pdf.create_table_header(headers, col_widths)
         for row in quality_table:
             pdf.create_table_row(row, col_widths)
         
-        # Problem Areas
+        # Critical Problem Areas
         dead_zones = network_data['problem_areas']['dead_zones']
-        if dead_zones:
-            pdf.ln(10)
+        poor_zones = network_data['problem_areas']['poor_coverage_zones']
+        
+        if dead_zones or poor_zones:
+            pdf.ln(15)
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(*self.danger_color)
-            pdf.cell(0, 8, f'NETWORK DEAD ZONES ({len(dead_zones)} identified)', 0, 1, 'L')
+            pdf.cell(0, 8, f'CRITICAL COMMUNICATION PROBLEMS ({len(dead_zones) + len(poor_zones)} areas)', 0, 1, 'L')
             
-            headers = ['Zone #', 'GPS Coordinates', 'Coverage Quality', 'Impact']
-            col_widths = [20, 50, 40, 75]
+            # Dead zones table
+            if dead_zones:
+                pdf.ln(5)
+                pdf.set_font('Helvetica', 'B', 10)
+                pdf.set_text_color(*self.danger_color)
+                pdf.cell(0, 6, f'DEAD ZONES - NO CELLULAR SERVICE ({len(dead_zones)} locations):', 0, 1, 'L')
+                
+                headers = ['Zone #', 'GPS Coordinates', 'Impact Level', 'Recommendation']
+                col_widths = [20, 50, 30, 85]
+                
+                pdf.create_table_header(headers, col_widths)
+                
+                for i, zone in enumerate(dead_zones[:10], 1):  # Limit to 10
+                    row_data = [
+                        str(i),
+                        f"{zone['latitude']:.4f}, {zone['longitude']:.4f}",
+                        "CRITICAL",
+                        "Use satellite phone or emergency beacon"
+                    ]
+                    pdf.create_table_row(row_data, col_widths)
             
-            pdf.create_table_header(headers, col_widths)
-            
-            for i, zone in enumerate(dead_zones[:10], 1):
-                row_data = [
-                    str(i),
-                    f"{zone['latitude']:.4f}, {zone['longitude']:.4f}",
-                    zone['coverage_quality'].title(),
-                    "No cellular service available"
-                ]
-                pdf.create_table_row(row_data, col_widths)
+            # Poor coverage areas
+            if poor_zones:
+                pdf.ln(10)
+                pdf.set_font('Helvetica', 'B', 10)
+                pdf.set_text_color(*self.warning_color)
+                pdf.cell(0, 6, f'POOR COVERAGE AREAS ({len(poor_zones)} locations):', 0, 1, 'L')
+                
+                headers = ['Area #', 'GPS Coordinates', 'Signal Level', 'Recommendation']
+                col_widths = [20, 50, 30, 85]
+                
+                pdf.create_table_header(headers, col_widths)
+                
+                for i, zone in enumerate(poor_zones[:8], 1):  # Limit to 8
+                    row_data = [
+                        str(i),
+                        f"{zone['latitude']:.4f}, {zone['longitude']:.4f}",
+                        "WEAK",
+                        "Download offline maps, carry backup communication"
+                    ]
+                    pdf.create_table_row(row_data, col_widths)
         
-        # Recommendations
+        # Network recommendations
         recommendations = network_data.get('recommendations', [])
         if recommendations:
-            pdf.ln(10)
+            pdf.ln(15)
             pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(0, 0, 0)
+            pdf.set_text_color(*self.primary_color)
             pdf.cell(0, 8, 'NETWORK COVERAGE RECOMMENDATIONS', 0, 1, 'L')
             
             pdf.set_font('Helvetica', '', 10)
+            pdf.set_text_color(0, 0, 0)
             for i, rec in enumerate(recommendations, 1):
                 pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-                pdf.multi_cell(170, 6, rec, 0, 'L')
+                pdf.multi_cell(172, 6, rec, 0, 'L')
                 pdf.ln(2)
+        
+        # Emergency communication plan
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.danger_color)
+        pdf.cell(0, 8, 'EMERGENCY COMMUNICATION PLAN', 0, 1, 'L')
+        
+        emergency_plan = [
+            "* Download offline maps before travel (Google Maps, Maps.me)",
+            "* Inform someone of your route and expected arrival time",
+            "* Carry a satellite communication device for dead zones",
+            "* Keep emergency numbers saved: 112 (Emergency), 100 (Police), 108 (Ambulance)",
+            "* Consider two-way radios for convoy travel",
+            "* Identify nearest towers and repeater locations along route"
+        ]
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for plan in emergency_plan:
+            pdf.cell(0, 6, plan, 0, 1, 'L')
     
     def _add_weather_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add weather analysis page"""
+        """Add comprehensive weather analysis"""
         from api.route_api import RouteAPI
         route_api = RouteAPI(self.db_manager, None)
         weather_data = route_api.get_weather_data(route_id)
         
         if 'error' in weather_data:
+            pdf.add_page()
+            pdf.add_section_header("WEATHER CONDITIONS ANALYSIS", "warning")
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'Weather analysis data not available.', 0, 1, 'L')
             return
         
         pdf.add_page()
-        pdf.add_section_header("WEATHER CONDITIONS ANALYSIS", "warning")
+        pdf.add_section_header("COMPREHENSIVE WEATHER CONDITIONS ANALYSIS", "warning")
         
         # Weather Statistics
         stats = weather_data['statistics']
         
-        stats_table = [
-            ['Weather Points Analyzed', str(stats['points_analyzed'])],
-            ['Average Temperature', f"{stats['average_temperature']}°C"],
-            ['Average Humidity', f"{stats['average_humidity']}%"],
-            ['Average Wind Speed', f"{stats['average_wind_speed']} km/h"],
-            ['Temperature Range', f"{stats['temperature_range']['min']}°C to {stats['temperature_range']['max']}°C"],
-            ['Weather Conditions', f"{len(weather_data['conditions_summary'])} different conditions"]
+        # Weather summary
+        summary_table = [
+            ['Weather Analysis Points', f"{stats['points_analyzed']:,}"],
+            ['Average Temperature', f"{stats['average_temperature']:.1f} deg C"],
+            ['Temperature Range', f"{stats['temperature_range']['min']:.1f} deg C to {stats['temperature_range']['max']:.1f} deg C"],
+            ['Average Humidity', f"{stats['average_humidity']:.1f}%"],
+            ['Average Wind Speed', f"{stats['average_wind_speed']:.1f} km/h"],
+            ['Weather Conditions Detected', f"{len(weather_data['conditions_summary'])} different types"],
+            ['Weather Risk Assessment', 'HIGH' if stats['average_temperature'] > 40 or stats['average_wind_speed'] > 50 else 'MODERATE' if stats['average_temperature'] > 35 or stats['average_wind_speed'] > 30 else 'LOW']
         ]
         
-        pdf.create_simple_table(stats_table, [60, 120])
+        pdf.create_detailed_table(summary_table, [70, 110])
         
-        # Weather Conditions Summary
+        # Temperature assessment
         pdf.ln(10)
+        avg_temp = stats['average_temperature']
+        if avg_temp > 40:
+            temp_status = "EXTREME HEAT WARNING"
+            temp_color = self.danger_color
+        elif avg_temp > 35:
+            temp_status = "HIGH TEMPERATURE CAUTION"
+            temp_color = self.warning_color
+        elif avg_temp < 5:
+            temp_status = "COLD WEATHER WARNING"
+            temp_color = self.info_color
+        else:
+            temp_status = "MODERATE TEMPERATURE CONDITIONS"
+            temp_color = self.success_color
+        
+        pdf.set_fill_color(*temp_color)
+        pdf.rect(10, pdf.get_y(), 190, 12, 'F')
+        pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, 'WEATHER CONDITIONS SUMMARY', 0, 1, 'L')
+        pdf.set_xy(15, pdf.get_y() + 2)
+        pdf.cell(180, 8, f'TEMPERATURE STATUS: {temp_status} ({avg_temp:.1f} deg C)', 0, 1, 'C')
+        
+        # Weather Conditions Analysis
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'WEATHER CONDITIONS BREAKDOWN', 0, 1, 'L')
         
         conditions = weather_data['conditions_summary']
+        total_points = stats['points_analyzed']
         
-        headers = ['Weather Condition', 'Occurrences', 'Impact Assessment']
-        col_widths = [50, 30, 105]
+        headers = ['Weather Condition', 'Frequency', 'Route %', 'Risk Level', 'Driver Impact']
+        col_widths = [40, 25, 20, 25, 75]
         
         pdf.create_table_header(headers, col_widths)
         
         for condition, count in conditions.items():
-            impact = "HIGH RISK" if condition in ['Thunderstorm', 'Rain'] else "MODERATE" if condition in ['Clouds'] else "LOW RISK"
-            row_data = [condition, str(count), impact]
+            percentage = (count / total_points * 100) if total_points > 0 else 0
+            
+            # Assess risk level
+            if condition in ['Thunderstorm', 'Rain', 'Snow']:
+                risk = "HIGH"
+                impact = "Reduced visibility, slippery roads"
+            elif condition in ['Clouds', 'Fog', 'Mist']:
+                risk = "MODERATE"
+                impact = "Reduced visibility, lower speeds"
+            elif condition in ['Clear', 'Sunny']:
+                risk = "LOW"
+                impact = "Good driving conditions"
+            else:
+                risk = "MODERATE"
+                impact = "Variable conditions"
+            
+            row_data = [
+                condition,
+                f"{count:,}",
+                f"{percentage:.1f}%",
+                risk,
+                impact
+            ]
             pdf.create_table_row(row_data, col_widths)
         
-        # Weather Risks
+        # Weather Risks Assessment
+# Weather Risks Assessment
         weather_risks = weather_data.get('weather_risks', [])
         if weather_risks:
-            pdf.ln(10)
+            pdf.ln(15)
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(*self.danger_color)
-            pdf.cell(0, 8, 'IDENTIFIED WEATHER RISKS', 0, 1, 'L')
+            pdf.cell(0, 8, f'IDENTIFIED WEATHER RISKS ({len(weather_risks)} risks)', 0, 1, 'L')
             
             pdf.set_font('Helvetica', '', 10)
             pdf.set_text_color(0, 0, 0)
             for i, risk in enumerate(weather_risks, 1):
                 pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-                pdf.multi_cell(170, 6, risk, 0, 'L')
+                pdf.multi_cell(172, 6, f"{risk} - Take appropriate precautions", 0, 'L')
                 pdf.ln(2)
         
-        # Weather Recommendations
+        # Weather-based vehicle recommendations
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'WEATHER-BASED VEHICLE PREPARATION', 0, 1, 'L')
+        
+        vehicle_prep = []
+        if avg_temp > 35:
+            vehicle_prep.extend([
+                "* Check engine cooling system and radiator fluid levels",
+                "* Ensure air conditioning is functioning properly", 
+                "* Carry extra water for radiator and personal hydration",
+                "* Check tire pressure (heat increases pressure)"
+            ])
+        
+        if avg_temp < 10:
+            vehicle_prep.extend([
+                "* Check battery condition (cold weather reduces capacity)",
+                "* Ensure proper engine oil viscosity for cold weather",
+                "* Check tire tread depth for wet/icy conditions",
+                "* Carry winter emergency kit with blankets"
+            ])
+        
+        if 'Rain' in conditions or 'Thunderstorm' in conditions:
+            vehicle_prep.extend([
+                "* Check windshield wipers and washer fluid",
+                "* Ensure headlights and taillights are functioning",
+                "* Check tire tread depth for wet road traction",
+                "* Clean all windows for maximum visibility"
+            ])
+        
+        if not vehicle_prep:
+            vehicle_prep = [
+                "* Standard vehicle maintenance check recommended",
+                "* Ensure all fluid levels are adequate",
+                "* Check tire condition and pressure",
+                "* Verify all lights are functioning properly"
+            ]
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for prep in vehicle_prep:
+            pdf.cell(0, 6, prep, 0, 1, 'L')
+        
+        # Weather recommendations
         recommendations = weather_data.get('recommendations', [])
         if recommendations:
             pdf.ln(10)
             pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(0, 8, 'WEATHER-BASED RECOMMENDATIONS', 0, 1, 'L')
+            pdf.set_text_color(*self.warning_color)
+            pdf.cell(0, 8, 'WEATHER-BASED DRIVING RECOMMENDATIONS', 0, 1, 'L')
             
             pdf.set_font('Helvetica', '', 10)
+            pdf.set_text_color(0, 0, 0)
             for i, rec in enumerate(recommendations, 1):
                 pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-                pdf.multi_cell(170, 6, rec, 0, 'L')
+                pdf.multi_cell(172, 6, rec, 0, 'L')
                 pdf.ln(2)
     
     def _add_compliance_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add regulatory compliance page"""
+        """Add detailed regulatory compliance analysis"""
         from api.route_api import RouteAPI
         route_api = RouteAPI(self.db_manager, None)
         compliance_data = route_api.get_compliance_data(route_id)
         
         if 'error' in compliance_data:
+            pdf.add_page()
+            pdf.add_section_header("REGULATORY COMPLIANCE ANALYSIS", "danger")
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'Regulatory compliance data not available.', 0, 1, 'L')
             return
         
         pdf.add_page()
-        pdf.add_section_header("REGULATORY COMPLIANCE ANALYSIS", "danger")
+        pdf.add_section_header("COMPREHENSIVE REGULATORY COMPLIANCE ANALYSIS", "danger")
         
-        # Compliance Score
+        # Compliance Assessment
         assessment = compliance_data['compliance_assessment']
         score = assessment['overall_score']
         
+        # Compliance status indicator
         if score >= 80:
             color = self.success_color
-            status = "COMPLIANT"
+            status = "FULLY COMPLIANT"
+            icon = "[OK]"
         elif score >= 60:
             color = self.warning_color
             status = "NEEDS ATTENTION"
+            icon = "[!]"
         else:
             color = self.danger_color
             status = "NON-COMPLIANT"
+            icon = "[X]"
         
         pdf.set_fill_color(*color)
         pdf.rect(10, pdf.get_y(), 190, 15, 'F')
         pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 14)
         pdf.set_xy(15, pdf.get_y() + 3)
-        pdf.cell(180, 9, f'COMPLIANCE STATUS: {status} (Score: {score}/100)', 0, 1, 'C')
-        pdf.ln(5)
+        pdf.cell(180, 9, f'{icon} COMPLIANCE STATUS: {status} (Score: {score}/100)', 0, 1, 'C')
         
-        # Vehicle Information
+        # Vehicle and Route Information
+        pdf.ln(10)
         pdf.set_text_color(0, 0, 0)
         vehicle_info = compliance_data['vehicle_info']
+        route_analysis = compliance_data['route_analysis']
+        
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'VEHICLE & ROUTE COMPLIANCE DETAILS', 0, 1, 'L')
         
         vehicle_table = [
             ['Vehicle Type', vehicle_info['type'].replace('_', ' ').title()],
             ['Vehicle Category', vehicle_info['category']],
-            ['Vehicle Weight', f"{vehicle_info['weight']:,} kg"],
-            ['AIS-140 Required', 'YES' if vehicle_info['ais_140_required'] else 'NO'],
-            ['Route Distance', compliance_data['route_analysis']['distance']],
-            ['Estimated Duration', compliance_data['route_analysis']['duration']]
+            ['Vehicle Weight Classification', f"{vehicle_info['weight']:,} kg"],
+            ['AIS-140 GPS Tracking Required', 'YES (Mandatory)' if vehicle_info['ais_140_required'] else 'NO (Not Required)'],
+            ['Route Origin', route_analysis['from_address'][:50]],
+            ['Route Destination', route_analysis['to_address'][:50]],
+            ['Total Route Distance', route_analysis['distance']],
+            ['Estimated Travel Duration', route_analysis['duration']],
+            ['Interstate Travel', 'YES' if 'km' in route_analysis.get('distance', '') and int(''.join(filter(str.isdigit, route_analysis.get('distance', '0')))) > 500 else 'NO']
         ]
         
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, 'VEHICLE & ROUTE INFORMATION', 0, 1, 'L')
-        pdf.create_simple_table(vehicle_table, [60, 120])
+        pdf.create_detailed_table(vehicle_table, [80, 100])
         
-        # Compliance Issues
+        # Compliance Requirements Analysis
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.danger_color)
+        pdf.cell(0, 8, 'MANDATORY COMPLIANCE REQUIREMENTS', 0, 1, 'L')
+        
+        requirements = assessment['critical_requirements']
+        
+        headers = ['Requirement Category', 'Compliance Status', 'Action Required']
+        col_widths = [60, 40, 85]
+        
+        pdf.create_table_header(headers, col_widths)
+        
+        requirement_details = [
+            ['Valid Driving License', 'REQUIRED', 'Verify license category matches vehicle type'],
+            ['Vehicle Registration', 'REQUIRED', 'Ensure current registration certificate'],
+            ['Vehicle Insurance', 'REQUIRED', 'Valid comprehensive insurance policy'],
+            ['Route Permits', 'CONDITIONAL', 'Required for interstate/heavy vehicle travel'],
+            ['AIS-140 GPS Device', 'REQUIRED' if vehicle_info['ais_140_required'] else 'NOT REQUIRED', 'Install certified GPS tracking system'],
+            ['Driving Time Limits (RTSP)', 'REQUIRED', 'Maximum 10 hours continuous driving'],
+            ['Vehicle Fitness Certificate', 'REQUIRED', 'Valid pollution and fitness certificates'],
+            ['Driver Medical Certificate', 'REQUIRED', 'Valid medical fitness certificate']
+        ]
+        
+        for req_detail in requirement_details:
+            pdf.create_table_row(req_detail, col_widths)
+        
+        # Compliance Issues Identified
         issues = assessment['issues_identified']
         if issues:
-            pdf.ln(10)
+            pdf.ln(15)
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(*self.danger_color)
-            pdf.cell(0, 8, f'COMPLIANCE ISSUES IDENTIFIED ({len(issues)})', 0, 1, 'L')
+            pdf.cell(0, 8, f'COMPLIANCE ISSUES REQUIRING IMMEDIATE ATTENTION ({len(issues)})', 0, 1, 'L')
             
             pdf.set_font('Helvetica', '', 10)
             pdf.set_text_color(0, 0, 0)
             for i, issue in enumerate(issues, 1):
                 pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-                pdf.multi_cell(170, 6, issue, 0, 'L')
+                pdf.multi_cell(172, 6, f"{issue} - Address before travel", 0, 'L')
                 pdf.ln(2)
         
-        # Critical Requirements
-        requirements = assessment['critical_requirements']
+        # Regulatory Framework Details
         pdf.ln(10)
         pdf.set_font('Helvetica', 'B', 12)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 8, 'CRITICAL COMPLIANCE REQUIREMENTS', 0, 1, 'L')
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'APPLICABLE REGULATORY FRAMEWORK', 0, 1, 'L')
+        
+        regulations = [
+            "* Motor Vehicles Act, 1988 - Vehicle registration and licensing requirements",
+            "* Central Motor Vehicles Rules, 1989 - Technical specifications and safety",
+            "* AIS-140 Standards - GPS tracking and panic button requirements",
+            "* Road Transport and Safety Policy (RTSP) - Driver working hours",
+            "* Interstate Transport Permits - Required for commercial interstate travel",
+            "* Pollution Control Board Norms - Emission standards compliance",
+            "* Goods and Services Tax (GST) - Tax compliance for commercial transport",
+            "* Road Safety and Transport Authority - State-specific requirements"
+        ]
         
         pdf.set_font('Helvetica', '', 10)
-        for i, req in enumerate(requirements, 1):
-            pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-            pdf.multi_cell(170, 6, req, 0, 'L')
-            pdf.ln(2)
+        pdf.set_text_color(0, 0, 0)
+        for regulation in regulations:
+            pdf.cell(0, 6, regulation, 0, 1, 'L')
         
-        # Recommendations
+        # Compliance recommendations
         recommendations = compliance_data.get('recommendations', [])
         if recommendations:
             pdf.ln(10)
             pdf.set_font('Helvetica', 'B', 12)
+            pdf.set_text_color(*self.warning_color)
             pdf.cell(0, 8, 'COMPLIANCE RECOMMENDATIONS', 0, 1, 'L')
             
             pdf.set_font('Helvetica', '', 10)
+            pdf.set_text_color(0, 0, 0)
             for i, rec in enumerate(recommendations, 1):
                 pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-                pdf.multi_cell(170, 6, rec, 0, 'L')
+                pdf.multi_cell(172, 6, rec, 0, 'L')
                 pdf.ln(2)
+        
+        # Penalty and consequences
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.danger_color)
+        pdf.cell(0, 8, 'NON-COMPLIANCE PENALTIES & CONSEQUENCES', 0, 1, 'L')
+        
+        penalties = [
+            "* Driving without valid license: Fine up to Rs 5,000 + imprisonment",
+            "* Vehicle without registration: Fine up to Rs 10,000 + vehicle seizure",
+            "* No insurance: Fine up to Rs 2,000 + vehicle seizure",
+            "* AIS-140 non-compliance: Permit cancellation + heavy fines",
+            "* Overloading violations: Fine Rs 20,000 + per excess ton",
+            "* Driving time violations: License suspension + fines",
+            "* Interstate without permits: Vehicle seizure + penalty",
+            "* Environmental violations: Fine up to Rs 10,000 + registration cancellation"
+        ]
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for penalty in penalties:
+            pdf.cell(0, 6, penalty, 0, 1, 'L')
     
     def _add_elevation_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add elevation analysis page"""
+        """Add comprehensive elevation analysis"""
         from api.route_api import RouteAPI
         route_api = RouteAPI(self.db_manager, None)
         elevation_data = route_api.get_elevation_data(route_id)
         
         if 'error' in elevation_data:
+            pdf.add_page()
+            pdf.add_section_header("ELEVATION ANALYSIS", "success")
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'Elevation analysis data not available.', 0, 1, 'L')
             return
         
         pdf.add_page()
-        pdf.add_section_header("ELEVATION ANALYSIS", "success")
+        pdf.add_section_header("COMPREHENSIVE ELEVATION & TERRAIN ANALYSIS", "success")
         
         # Elevation Statistics
         stats = elevation_data['statistics']
-        
-        stats_table = [
-            ['Minimum Elevation', f"{stats['min_elevation']} m"],
-            ['Maximum Elevation', f"{stats['max_elevation']} m"],
-            ['Average Elevation', f"{stats['average_elevation']} m"],
-            ['Elevation Range', f"{stats['elevation_range']} m"],
-            ['Total Points Analyzed', str(stats['total_points'])],
-            ['Terrain Type', elevation_data['terrain_analysis']['terrain_type']]
-        ]
-        
-        pdf.create_simple_table(stats_table, [60, 120])
-        
-        # Terrain Analysis
         terrain = elevation_data['terrain_analysis']
         
-        pdf.ln(10)
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, 'TERRAIN ANALYSIS', 0, 1, 'L')
-        
-        terrain_table = [
+        # Elevation summary
+        summary_table = [
+            ['Minimum Elevation', f"{stats['min_elevation']:.1f} meters above sea level"],
+            ['Maximum Elevation', f"{stats['max_elevation']:.1f} meters above sea level"],
+            ['Average Elevation', f"{stats['average_elevation']:.1f} meters above sea level"],
+            ['Total Elevation Range', f"{stats['elevation_range']:.1f} meters"],
             ['Terrain Classification', terrain['terrain_type']],
-            ['Driving Difficulty', terrain['driving_difficulty']],
-            ['Fuel Impact', terrain['fuel_impact']]
+            ['Driving Difficulty Level', terrain['driving_difficulty']],
+            ['Fuel Consumption Impact', terrain['fuel_impact']],
+            ['Analysis Points', f"{stats['total_points']:,} GPS coordinates"]
         ]
         
-        pdf.create_simple_table(terrain_table, [60, 120])
+        pdf.create_detailed_table(summary_table, [80, 100])
+        
+        # Terrain classification assessment
+        pdf.ln(10)
+        terrain_type = terrain['terrain_type']
+        if terrain_type == 'MOUNTAINOUS':
+            terrain_color = self.danger_color
+            terrain_status = "MOUNTAINOUS TERRAIN - HIGH DIFFICULTY"
+        elif terrain_type == 'HILLY':
+            terrain_color = self.warning_color
+            terrain_status = "HILLY TERRAIN - MODERATE DIFFICULTY"
+        elif terrain_type == 'HIGH_PLATEAU':
+            terrain_color = self.info_color
+            terrain_status = "HIGH PLATEAU - MODERATE CONDITIONS"
+        else:
+            terrain_color = self.success_color
+            terrain_status = "PLAINS TERRAIN - EASY CONDITIONS"
+        
+        pdf.set_fill_color(*terrain_color)
+        pdf.rect(10, pdf.get_y(), 190, 12, 'F')
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_xy(15, pdf.get_y() + 2)
+        pdf.cell(180, 8, f'TERRAIN ASSESSMENT: {terrain_status}', 0, 1, 'C')
         
         # Significant Elevation Changes
         changes = elevation_data['significant_changes']
         if changes:
-            pdf.ln(10)
+            pdf.ln(15)
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(*self.warning_color)
-            pdf.cell(0, 8, f'SIGNIFICANT ELEVATION CHANGES ({len(changes)})', 0, 1, 'L')
+            pdf.cell(0, 8, f'SIGNIFICANT ELEVATION CHANGES ({len(changes)} locations)', 0, 1, 'L')
             
-            headers = ['Change #', 'Type', 'Elevation Change', 'From (m)', 'To (m)', 'GPS Coordinates']
-            col_widths = [20, 25, 30, 25, 25, 60]
+            headers = ['Change #', 'Type', 'Elevation Change', 'From (m)', 'To (m)', 'GPS Location', 'Impact']
+            col_widths = [20, 20, 25, 20, 20, 50, 40]
             
             pdf.create_table_header(headers, col_widths)
             
-            for i, change in enumerate(changes[:10], 1):
+            for i, change in enumerate(changes[:15], 1):  # Limit to 15 changes
                 location = change['location']
+                impact = "HIGH" if change['elevation_change'] > 200 else "MODERATE" if change['elevation_change'] > 100 else "LOW"
+                
                 row_data = [
                     str(i),
                     change['type'].title(),
-                    f"{change['elevation_change']:.0f} m",
+                    f"{change['elevation_change']:.0f}m",
                     f"{change['from_elevation']:.0f}",
                     f"{change['to_elevation']:.0f}",
-                    f"{location['latitude']:.4f}, {location['longitude']:.4f}"
+                    f"{location['latitude']:.4f}, {location['longitude']:.4f}",
+                    impact
                 ]
                 pdf.create_table_row(row_data, col_widths)
+        
+        # Driving difficulty analysis
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'ELEVATION-BASED DRIVING CHALLENGES', 0, 1, 'L')
+        
+        difficulty = terrain['driving_difficulty']
+        challenges = []
+        
+        if difficulty == 'HIGH':
+            challenges = [
+                "* Steep gradients requiring low gear driving and engine braking",
+                "* Increased fuel consumption due to elevation changes",
+                "* Potential engine overheating on long climbs",
+                "* Brake wear due to frequent downhill braking",
+                "* Reduced vehicle performance at high altitudes",
+                "* Weather variations with altitude changes"
+            ]
+        elif difficulty == 'MEDIUM':
+            challenges = [
+                "* Moderate gradients affecting fuel efficiency",
+                "* Some engine strain on uphill sections",
+                "* Occasional brake usage on downhill sections",
+                "* Minor impact on vehicle performance",
+                "* Moderate fuel consumption increase"
+            ]
+        else:
+            challenges = [
+                "* Minimal elevation changes with flat terrain",
+                "* Normal fuel consumption expected",
+                "* Standard vehicle performance throughout",
+                "* No significant gradient-related challenges"
+            ]
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for challenge in challenges:
+            pdf.cell(0, 6, challenge, 0, 1, 'L')
+        
+        # Vehicle preparation recommendations
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.danger_color)
+        pdf.cell(0, 8, 'ELEVATION-SPECIFIC VEHICLE PREPARATION', 0, 1, 'L')
+        
+        prep_recommendations = []
+        
+        if stats['elevation_range'] > 1000:  # Significant elevation changes
+            prep_recommendations = [
+                "* Check engine cooling system - radiator, coolant levels, and fans",
+                "* Inspect brake system - pads, fluid, and brake lines condition",
+                "* Verify transmission fluid for proper gear shifting",
+                "* Check tire pressure and tread depth for varied conditions",
+                "* Ensure fuel tank is full - higher consumption expected",
+                "* Carry emergency coolant and brake fluid",
+                "* Plan rest stops for engine cooling on long climbs"
+            ]
+        elif stats['elevation_range'] > 500:  # Moderate changes
+            prep_recommendations = [
+                "* Check cooling system and fluid levels",
+                "* Inspect brake system condition",
+                "* Verify fuel level and plan refueling stops",
+                "* Check tire condition for varied terrain"
+            ]
+        else:  # Minimal changes
+            prep_recommendations = [
+                "* Standard vehicle maintenance check sufficient",
+                "* Normal fuel planning adequate",
+                "* Standard tire and brake inspection"
+            ]
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for prep in prep_recommendations:
+            pdf.cell(0, 6, prep, 0, 1, 'L')
+        
+        # Fuel consumption impact
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.warning_color)
+        pdf.cell(0, 8, 'FUEL CONSUMPTION IMPACT ANALYSIS', 0, 1, 'L')
+        
+        fuel_impact = terrain['fuel_impact']
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        
+        if "HIGH" in fuel_impact:
+            pdf.cell(0, 6, "* Expected fuel consumption increase: 25-40% above normal", 0, 1, 'L')
+            pdf.cell(0, 6, "* Plan additional fuel stops and carry extra fuel if possible", 0, 1, 'L')
+            pdf.cell(0, 6, "* Consider route alternatives with less elevation change", 0, 1, 'L')
+        elif "MEDIUM" in fuel_impact:
+            pdf.cell(0, 6, "* Expected fuel consumption increase: 15-25% above normal", 0, 1, 'L')
+            pdf.cell(0, 6, "* Plan fuel stops accounting for increased consumption", 0, 1, 'L')
+        else:
+            pdf.cell(0, 6, "* Normal fuel consumption expected", 0, 1, 'L')
+            pdf.cell(0, 6, "* Standard fuel planning adequate", 0, 1, 'L')
+        
+        pdf.cell(0, 6, f"* Total ascent sections identified: {len([c for c in changes if c['type'] == 'ascent'])}", 0, 1, 'L')
+        pdf.cell(0, 6, f"* Total descent sections identified: {len([c for c in changes if c['type'] == 'descent'])}", 0, 1, 'L')
     
     def _add_emergency_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add emergency planning page"""
+        """Add comprehensive emergency preparedness analysis"""
         from api.route_api import RouteAPI
         route_api = RouteAPI(self.db_manager, None)
         emergency_data = route_api.get_emergency_data(route_id)
         
         if 'error' in emergency_data:
+            pdf.add_page()
+            pdf.add_section_header("EMERGENCY PREPAREDNESS ANALYSIS", "danger")
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'Emergency preparedness data not available.', 0, 1, 'L')
             return
         
         pdf.add_page()
-        pdf.add_section_header("EMERGENCY PREPAREDNESS ANALYSIS", "danger")
+        pdf.add_section_header("COMPREHENSIVE EMERGENCY PREPAREDNESS ANALYSIS", "danger")
         
-        # Emergency Score
+        # Emergency Preparedness Score
         assessment = emergency_data['preparedness_assessment']
         score = assessment['emergency_score']
         
         if score >= 80:
             color = self.success_color
-            status = "EXCELLENT"
+            status = "EXCELLENT PREPAREDNESS"
+            icon = "[OK]"
         elif score >= 60:
             color = self.warning_color
-            status = "GOOD"
+            status = "GOOD PREPAREDNESS"
+            icon = "[!]"
         else:
             color = self.danger_color
             status = "NEEDS IMPROVEMENT"
+            icon = "[X]"
         
         pdf.set_fill_color(*color)
         pdf.rect(10, pdf.get_y(), 190, 15, 'F')
         pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 14)
         pdf.set_xy(15, pdf.get_y() + 3)
-        pdf.cell(180, 9, f'EMERGENCY PREPAREDNESS: {status} (Score: {score}/100)', 0, 1, 'C')
-        pdf.ln(5)
+        pdf.cell(180, 9, f'{icon} EMERGENCY PREPAREDNESS: {status} (Score: {score}/100)', 0, 1, 'C')
         
-        # Emergency Services Summary
+        # Emergency Services Availability
+        pdf.ln(10)
         services = emergency_data['emergency_services']
+        comm_analysis = emergency_data['communication_analysis']
         
         pdf.set_text_color(0, 0, 0)
         pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, 'EMERGENCY SERVICES AVAILABILITY', 0, 1, 'L')
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'EMERGENCY SERVICES AVAILABILITY ASSESSMENT', 0, 1, 'L')
         
         services_table = [
-            ['Hospitals', str(len(services['hospitals']))],
-            ['Police Stations', str(len(services['police_stations']))],
-            ['Fire Stations', str(len(services['fire_stations']))],
-            ['Communication Reliability', emergency_data['communication_analysis']['communication_reliability']],
-            ['Network Dead Zones', str(emergency_data['communication_analysis']['dead_zones'])]
+            ['Medical Facilities (Hospitals)', f"{len(services['hospitals'])} facilities identified"],
+            ['Law Enforcement (Police)', f"{len(services['police_stations'])} stations identified"],
+            ['Fire & Rescue Services', f"{len(services['fire_stations'])} stations identified"],
+            ['Communication Reliability', comm_analysis['communication_reliability']],
+            ['Network Dead Zones', f"{comm_analysis['dead_zones']} critical areas"],
+            ['Emergency Response Time', 'Variable - depends on location and traffic'],
+            ['Overall Service Coverage', 'GOOD' if len(services['hospitals']) > 2 else 'MODERATE' if len(services['hospitals']) > 0 else 'LIMITED']
         ]
         
-        pdf.create_simple_table(services_table, [60, 120])
+        pdf.create_detailed_table(services_table, [80, 100])
         
-        # Emergency Contacts
+        # Critical Emergency Contact Numbers
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.danger_color)
+        pdf.cell(0, 8, 'CRITICAL EMERGENCY CONTACT NUMBERS - MEMORIZE OR SAVE', 0, 1, 'L')
+        
         contacts = emergency_data['emergency_contacts']
         
-        pdf.ln(10)
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, 'EMERGENCY CONTACT NUMBERS', 0, 1, 'L')
-        
-        headers = ['Service', 'Contact Number', 'Purpose']
-        col_widths = [40, 30, 115]
+        headers = ['Emergency Service', 'Contact Number', 'When to Call', 'Response Type']
+        col_widths = [45, 30, 55, 55]
         
         pdf.create_table_header(headers, col_widths)
         
-        contact_list = [
-            ('National Emergency', contacts['national_emergency'], 'All emergency services'),
-            ('Police', contacts['police'], 'Police assistance'),
-            ('Fire Services', contacts['fire'], 'Fire and rescue'),
-            ('Ambulance', contacts['ambulance'], 'Medical emergency'),
-            ('Highway Patrol', contacts['highway_patrol'], 'Highway assistance')
+        contact_details = [
+            ('National Emergency', contacts['national_emergency'], 'Any life-threatening emergency', 'Police/Fire/Medical'),
+            ('Police Emergency', contacts['police'], 'Crime, accidents, security threats', 'Law enforcement'),
+            ('Fire Services', contacts['fire'], 'Fire, rescue, hazmat incidents', 'Fire & rescue teams'),
+            ('Medical Emergency', contacts['ambulance'], 'Medical emergencies, injuries', 'Ambulance service'),
+            ('Highway Patrol', contacts['highway_patrol'], 'Highway accidents, breakdowns', 'Traffic police')
         ]
         
-        for service, number, purpose in contact_list:
-            pdf.create_table_row([service, number, purpose], col_widths)
+        for service, number, when, response in contact_details:
+            pdf.create_table_row([service, number, when, response], col_widths)
         
-        # Critical Gaps
+        # Emergency Services Along Route
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.info_color)
+        pdf.cell(0, 8, 'EMERGENCY FACILITIES ALONG ROUTE', 0, 1, 'L')
+        
+        # Hospitals
+        if services['hospitals']:
+            pdf.ln(5)
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.set_text_color(*self.danger_color)
+            pdf.cell(0, 6, f'MEDICAL FACILITIES ({len(services["hospitals"])} identified):', 0, 1, 'L')
+            
+            headers = ['#', 'Hospital Name', 'Location', 'Services', 'Distance']
+            col_widths = [15, 50, 50, 40, 30]
+            
+            pdf.create_table_header(headers, col_widths)
+            
+            for i, hospital in enumerate(services['hospitals'][:10], 1):
+                row_data = [
+                    str(i),
+                    hospital.get('name', 'Unknown Hospital')[:25],
+                    hospital.get('address', 'Unknown location')[:25],
+                    'Emergency care',
+                    'Along route'
+                ]
+                pdf.create_table_row(row_data, col_widths)
+        
+        # Police stations
+        if services['police_stations']:
+            pdf.ln(10)
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.set_text_color(*self.primary_color)
+            pdf.cell(0, 6, f'POLICE STATIONS ({len(services["police_stations"])} identified):', 0, 1, 'L')
+            
+            headers = ['#', 'Police Station', 'Location', 'Services', 'Distance']
+            col_widths = [15, 50, 50, 40, 30]
+            
+            pdf.create_table_header(headers, col_widths)
+            
+            for i, station in enumerate(services['police_stations'][:8], 1):
+                row_data = [
+                    str(i),
+                    station.get('name', 'Unknown Station')[:25],
+                    station.get('address', 'Unknown location')[:25],
+                    'Law enforcement',
+                    'Along route'
+                ]
+                pdf.create_table_row(row_data, col_widths)
+        
+        # Critical Preparedness Gaps
         gaps = assessment.get('critical_gaps', [])
         if gaps:
-            pdf.ln(10)
+            pdf.ln(15)
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(*self.danger_color)
-            pdf.cell(0, 8, 'CRITICAL PREPAREDNESS GAPS', 0, 1, 'L')
+            pdf.cell(0, 8, f'CRITICAL PREPAREDNESS GAPS ({len(gaps)} identified)', 0, 1, 'L')
             
             pdf.set_font('Helvetica', '', 10)
             pdf.set_text_color(0, 0, 0)
             for i, gap in enumerate(gaps, 1):
                 pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-                pdf.multi_cell(170, 6, gap, 0, 'L')
+                pdf.multi_cell(172, 6, f"{gap} - Address before travel", 0, 'L')
                 pdf.ln(2)
         
-        # Emergency Recommendations
+        # Emergency Preparedness Checklist
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'EMERGENCY PREPAREDNESS CHECKLIST', 0, 1, 'L')
+        
+        checklist = [
+            "[] First aid kit with bandages, antiseptic, pain relievers",
+            "[] Emergency contact numbers saved in phone and written backup",
+            "[] Vehicle emergency kit - tools, spare tire, jumper cables",
+            "[] Emergency water supply (minimum 2 liters per person)",
+            "[] Non-perishable emergency food (energy bars, nuts)",
+            "[] Flashlight with extra batteries or hand-crank model",
+            "[] Emergency blanket or warm clothing",
+            "[] Portable phone charger or power bank",
+            "[] Emergency cash in small denominations",
+            "[] Vehicle documents in waterproof container",
+            "[] Road atlas or offline maps as backup",
+            "[] Emergency whistle for signaling help"
+        ]
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for item in checklist:
+            pdf.cell(0, 6, item, 0, 1, 'L')
+        
+        # Emergency recommendations
         recommendations = emergency_data.get('recommendations', [])
         if recommendations:
             pdf.ln(10)
             pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(0, 0, 0)
+            pdf.set_text_color(*self.warning_color)
             pdf.cell(0, 8, 'EMERGENCY PREPAREDNESS RECOMMENDATIONS', 0, 1, 'L')
             
             pdf.set_font('Helvetica', '', 10)
+            pdf.set_text_color(0, 0, 0)
             for i, rec in enumerate(recommendations, 1):
                 pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-                pdf.multi_cell(170, 6, rec, 0, 'L')
+                pdf.multi_cell(172, 6, rec, 0, 'L')
                 pdf.ln(2)
     
+    def _add_route_map_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
+        """Add comprehensive route map with stored images"""
+        
+        # Get route map images from database
+        route_maps = self.get_stored_images_from_db(route_id, 'route_map')
+        
+        pdf.add_page()
+        pdf.add_section_header("COMPREHENSIVE ROUTE MAP WITH CRITICAL POINTS", "info")
+        
+        if route_maps:
+            for route_map in route_maps[:1]:  # Use first available route map
+                image_path = route_map['file_path']
+                if os.path.exists(image_path):
+                    try:
+                        # Map information
+                        pdf.set_font('Helvetica', 'B', 12)
+                        pdf.set_text_color(*self.primary_color)
+                        pdf.cell(0, 8, 'ROUTE OVERVIEW MAP', 0, 1, 'L')
+                        
+                        # Add large route map
+                        pdf.ln(5)
+                        pdf.image(image_path, x=10, y=pdf.get_y(), w=190, h=140)
+                        
+                        # Add map legend and details
+                        pdf.set_y(pdf.get_y() + 145)
+                        pdf.set_font('Helvetica', 'B', 12)
+                        pdf.set_text_color(*self.primary_color)
+                        pdf.cell(0, 8, 'MAP LEGEND & ANALYSIS', 0, 1, 'C')
+                        
+                        # Map details
+                        pdf.set_font('Helvetica', '', 10)
+                        pdf.set_text_color(0, 0, 0)
+                        map_details = [
+                            ['Map Type', 'Comprehensive Route Visualization with Risk Markers'],
+                            ['File Information', f'{os.path.basename(route_map["filename"])} ({route_map.get("file_size", 0) / 1024:.1f} KB)'],
+                            ['Map Scale', 'Optimized for complete route visualization'],
+                            ['Created Date', route_map.get('created_at', 'Unknown')[:16]],
+                            ['Critical Points Marked', 'Sharp turns, dead zones, POIs highlighted'],
+                            ['Color Coding', 'Red: High risk, Orange: Moderate risk, Green: Safe areas']
+                        ]
+                        
+                        pdf.create_detailed_table(map_details, [60, 120])
+                        
+                    except Exception as e:
+                        print(f"Error adding route map: {e}")
+                        pdf.set_font('Helvetica', '', 12)
+                        pdf.cell(0, 10, f'Error loading route map: {str(e)}', 0, 1, 'L')
+                else:
+                    pdf.set_font('Helvetica', '', 12)
+                    pdf.cell(0, 10, f'Route map file not found: {image_path}', 0, 1, 'L')
+        else:
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'No route map images available for this route.', 0, 1, 'L')
+            
+            # Provide alternative route information
+            pdf.ln(10)
+            pdf.set_font('Helvetica', 'B', 12)
+            pdf.set_text_color(*self.primary_color)
+            pdf.cell(0, 8, 'ROUTE NAVIGATION INFORMATION', 0, 1, 'L')
+            
+            # Get basic route data
+            route = self.db_manager.get_route(route_id)
+            if route:
+                navigation_info = [
+                    ['Origin', route.get('from_address', 'Unknown')],
+                    ['Destination', route.get('to_address', 'Unknown')],
+                    ['Total Distance', route.get('distance', 'Unknown')],
+                    ['Estimated Duration', route.get('duration', 'Unknown')],
+                    ['Recommended Navigation', 'Use offline maps and GPS navigation'],
+                    ['Alternative Route Planning', 'Consider backup routes for critical areas']
+                ]
+                
+                pdf.set_font('Helvetica', '', 10)
+                pdf.create_detailed_table(navigation_info, [60, 120])
+    
+    def _add_images_summary_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
+        """Add comprehensive images inventory and summary"""
+        
+        pdf.add_page()
+        pdf.add_section_header("COMPREHENSIVE STORED IMAGES SUMMARY", "info")
+        
+        # Get all images for this route
+        all_images = self.get_stored_images_from_db(route_id)
+        
+        if not all_images:
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'No images stored for this route in the database.', 0, 1, 'L')
+            return
+        
+        # Group images by type and analyze
+        images_by_type = {}
+        total_size = 0
+        file_status = {'found': 0, 'missing': 0}
+        
+        for img in all_images:
+            img_type = img['image_type']
+            if img_type not in images_by_type:
+                images_by_type[img_type] = {'count': 0, 'size': 0, 'files': []}
+            
+            images_by_type[img_type]['count'] += 1
+            images_by_type[img_type]['size'] += img.get('file_size', 0)
+            images_by_type[img_type]['files'].append(img)
+            total_size += img.get('file_size', 0)
+            
+            # Check file existence
+            if img['file_path'] and os.path.exists(img['file_path']):
+                file_status['found'] += 1
+            else:
+                file_status['missing'] += 1
+        
+        # Storage summary statistics
+        summary_table = [
+            ['Total Images in Database', f"{len(all_images):,}"],
+            ['Image Types Available', f"{len(images_by_type)} categories"],
+            ['Street View Images', f"{len(images_by_type.get('street_view', {}).get('files', [])):,}"],
+            ['Satellite Images', f"{len(images_by_type.get('satellite', {}).get('files', [])):,}"],
+            ['Route Map Images', f"{len(images_by_type.get('route_map', {}).get('files', [])):,}"],
+            ['Total Storage Used', f"{total_size / (1024*1024):.2f} MB"],
+            ['Files Found on Disk', f"{file_status['found']:,} ({file_status['found']/len(all_images)*100:.1f}%)"],
+            ['Missing Files', f"{file_status['missing']:,} ({file_status['missing']/len(all_images)*100:.1f}%)"],
+            ['Storage Base Path', self.image_base_path]
+        ]
+        
+        pdf.create_detailed_table(summary_table, [80, 100])
+        
+        # File integrity assessment
+        pdf.ln(10)
+        integrity_score = (file_status['found'] / len(all_images) * 100) if all_images else 0
+        
+        if integrity_score >= 90:
+            integrity_color = self.success_color
+            integrity_status = "EXCELLENT FILE INTEGRITY"
+        elif integrity_score >= 75:
+            integrity_color = self.info_color
+            integrity_status = "GOOD FILE INTEGRITY"
+        elif integrity_score >= 50:
+            integrity_color = self.warning_color
+            integrity_status = "MODERATE FILE INTEGRITY"
+        else:
+            integrity_color = self.danger_color
+            integrity_status = "POOR FILE INTEGRITY"
+        
+        pdf.set_fill_color(*integrity_color)
+        pdf.rect(10, pdf.get_y(), 190, 12, 'F')
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_xy(15, pdf.get_y() + 2)
+        pdf.cell(180, 8, f'FILE INTEGRITY: {integrity_status} ({integrity_score:.1f}%)', 0, 1, 'C')
+        
+        # Detailed images inventory by type
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'DETAILED IMAGES INVENTORY BY TYPE', 0, 1, 'L')
+        
+        for img_type, type_data in images_by_type.items():
+            if not type_data['files']:
+                continue
+            
+            pdf.ln(10)
+            pdf.set_font('Helvetica', 'B', 11)
+            pdf.set_text_color(*self.info_color)
+            type_name = img_type.replace('_', ' ').title()
+            pdf.cell(0, 7, f'{type_name} Images ({type_data["count"]} files, {type_data["size"]/1024:.1f} KB)', 0, 1, 'L')
+            
+            # Table headers
+            headers = ['#', 'Filename', 'GPS Location', 'Size', 'Created', 'Status']
+            col_widths = [15, 45, 50, 20, 35, 20]
+            
+            pdf.create_table_header(headers, col_widths)
+            
+            # List files
+            for i, img in enumerate(type_data['files'][:15], 1):  # Limit to 15 per type
+                file_exists = os.path.exists(img['file_path']) if img['file_path'] else False
+                status = 'Found' if file_exists else 'Missing'
+                
+                row_data = [
+                    str(i),
+                    os.path.basename(img['filename'])[:20],
+                    f"{img.get('latitude', 0):.4f}, {img.get('longitude', 0):.4f}",
+                    f"{img.get('file_size', 0) / 1024:.0f}KB",
+                    img.get('created_at', 'Unknown')[:10],
+                    status
+                ]
+                
+                pdf.create_table_row(row_data, col_widths)
+        
+        # Storage recommendations
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.warning_color)
+        pdf.cell(0, 8, 'STORAGE MANAGEMENT RECOMMENDATIONS', 0, 1, 'L')
+        
+        recommendations = [
+            f"* Regular backup of image files to prevent data loss",
+            f"* Verify file paths in database match actual file locations",
+            f"* Consider compression for large image files to save storage space",
+            f"* Implement automated cleanup of old route images (>6 months)",
+            f"* Monitor storage usage - current usage: {total_size/1024/1024:.1f} MB",
+            f"* Maintain consistent naming convention for new images"
+        ]
+        
+        if file_status['missing'] > 0:
+            recommendations.extend([
+                f"* URGENT: {file_status['missing']} files are missing from disk",
+                f"* Update database or restore missing files from backup",
+                f"* Review file deletion policies and backup procedures"
+            ])
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for rec in recommendations:
+            pdf.cell(0, 6, rec, 0, 1, 'L')
+    
+    def _add_traffic_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
+        """Add traffic analysis page (placeholder for future implementation)"""
+        pdf.add_page()
+        pdf.add_section_header("TRAFFIC ANALYSIS", "warning")
+        
+        pdf.set_font('Helvetica', '', 12)
+        pdf.cell(0, 10, 'Traffic analysis feature is available with real-time traffic API integration.', 0, 1, 'L')
+        
+        # Placeholder content
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.primary_color)
+        pdf.cell(0, 8, 'TRAFFIC ANALYSIS CAPABILITIES', 0, 1, 'L')
+        
+        traffic_features = [
+            "* Real-time traffic congestion monitoring",
+            "* Historical traffic pattern analysis",
+            "* Peak hour identification and recommendations",
+            "* Alternative route suggestions during high traffic",
+            "* Traffic incident detection and alerts",
+            "* Travel time optimization based on traffic data"
+        ]
+        
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for feature in traffic_features:
+            pdf.cell(0, 6, feature, 0, 1, 'L')
+        
+        pdf.ln(10)
+        pdf.set_font('Helvetica', 'I', 10)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 6, 'Available with TomTom API, HERE API, or Google Traffic API integration', 0, 1, 'L')
+    
     def _add_api_status_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add API status and usage page"""
-        from utils.api_tracker import APITracker
-        
-        # Get API usage for this route
-        api_usage = self.db_manager.api_tracker.get_api_usage_by_route(route_id) if hasattr(self.db_manager, 'api_tracker') else []
-        
+        """Add comprehensive API status and usage report"""
         pdf.add_page()
         pdf.add_section_header("API STATUS & USAGE REPORT", "primary")
         
-        # API Usage Summary for this route
+        # Get API usage for this route
+        try:
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT api_name, endpoint, response_code, response_time, 
+                           success, timestamp, error_message
+                    FROM api_usage 
+                    WHERE route_id = ?
+                    ORDER BY timestamp
+                """, (route_id,))
+                
+                api_usage = [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            api_usage = []
+            print(f"Error getting API usage: {e}")
+        
         if api_usage:
+            # API usage summary
             api_summary = {}
             total_calls = len(api_usage)
             successful_calls = len([call for call in api_usage if call['success']])
@@ -849,125 +2121,109 @@ class PDFGenerator:
             for call in api_usage:
                 api_name = call['api_name']
                 if api_name not in api_summary:
-                    api_summary[api_name] = {'calls': 0, 'success': 0, 'total_time': 0}
+                    api_summary[api_name] = {'calls': 0, 'success': 0, 'total_time': 0, 'errors': []}
                 
                 api_summary[api_name]['calls'] += 1
                 if call['success']:
                     api_summary[api_name]['success'] += 1
                 api_summary[api_name]['total_time'] += call.get('response_time', 0)
+                
+                if call.get('error_message'):
+                    api_summary[api_name]['errors'].append(call['error_message'])
             
+            # Summary statistics
+            overall_success = (successful_calls / total_calls * 100) if total_calls > 0 else 0
+            
+            summary_table = [
+                ['Total API Calls Made', f"{total_calls:,}"],
+                ['Successful Calls', f"{successful_calls:,}"],
+                ['Failed Calls', f"{total_calls - successful_calls:,}"],
+                ['Overall Success Rate', f"{overall_success:.1f}%"],
+                ['APIs Used', f"{len(api_summary)} different services"],
+                ['Total Response Time', f"{sum(call.get('response_time', 0) for call in api_usage):.3f} seconds"],
+                ['Average Response Time', f"{sum(call.get('response_time', 0) for call in api_usage) / total_calls:.3f}s" if total_calls > 0 else "N/A"]
+            ]
+            
+            pdf.create_detailed_table(summary_table, [70, 110])
+            
+            # Success rate indicator
+            pdf.ln(10)
+            if overall_success >= 90:
+                status_color = self.success_color
+                status_text = "EXCELLENT API PERFORMANCE"
+            elif overall_success >= 75:
+                status_color = self.info_color
+                status_text = "GOOD API PERFORMANCE"
+            elif overall_success >= 50:
+                status_color = self.warning_color
+                status_text = "MODERATE API PERFORMANCE"
+            else:
+                status_color = self.danger_color
+                status_text = "POOR API PERFORMANCE"
+            
+            pdf.set_fill_color(*status_color)
+            pdf.rect(10, pdf.get_y(), 190, 12, 'F')
+            pdf.set_text_color(255, 255, 255)
             pdf.set_font('Helvetica', 'B', 12)
-            pdf.cell(0, 8, f'API USAGE FOR THIS ROUTE (Total: {total_calls} calls)', 0, 1, 'L')
+            pdf.set_xy(15, pdf.get_y() + 2)
+            pdf.cell(180, 8, f'API PERFORMANCE: {status_text} ({overall_success:.1f}%)', 0, 1, 'C')
             
-            headers = ['API Service', 'Calls Made', 'Success Rate', 'Avg Response Time']
-            col_widths = [50, 30, 30, 45]
+            # Detailed API breakdown
+            pdf.ln(15)
+            pdf.set_font('Helvetica', 'B', 12)
+            pdf.set_text_color(*self.primary_color)
+            pdf.cell(0, 8, 'DETAILED API USAGE BREAKDOWN', 0, 1, 'L')
+            
+            headers = ['API Service', 'Calls', 'Success Rate', 'Avg Time', 'Status']
+            col_widths = [50, 25, 30, 30, 50]
             
             pdf.create_table_header(headers, col_widths)
             
             for api_name, stats in api_summary.items():
                 success_rate = (stats['success'] / stats['calls'] * 100) if stats['calls'] > 0 else 0
                 avg_time = (stats['total_time'] / stats['calls']) if stats['calls'] > 0 else 0
+                status = 'Working' if success_rate >= 80 else 'Issues' if success_rate >= 50 else 'Failed'
                 
                 row_data = [
                     api_name.replace('_', ' ').title(),
                     str(stats['calls']),
                     f"{success_rate:.1f}%",
-                    f"{avg_time:.3f}s"
+                    f"{avg_time:.3f}s",
+                    status
                 ]
                 pdf.create_table_row(row_data, col_widths)
-            
-            # Overall success rate
-            overall_success = (successful_calls / total_calls * 100) if total_calls > 0 else 0
-            
-            pdf.ln(5)
-            pdf.set_font('Helvetica', 'B', 12)
-            if overall_success >= 90:
-                pdf.set_text_color(*self.success_color)
-                status = "EXCELLENT"
-            elif overall_success >= 75:
-                pdf.set_text_color(*self.info_color)
-                status = "GOOD"
-            else:
-                pdf.set_text_color(*self.danger_color)
-                status = "NEEDS ATTENTION"
-            
-            pdf.cell(0, 8, f'OVERALL API SUCCESS RATE: {overall_success:.1f}% - {status}', 0, 1, 'L')
         
         else:
             pdf.set_font('Helvetica', '', 12)
-            pdf.cell(0, 8, 'No API usage data available for this route.', 0, 1, 'L')
+            pdf.cell(0, 10, 'No API usage data available for this route.', 0, 1, 'L')
         
-        # Stored Images Summary
-        stored_images = self.db_manager.get_stored_images(route_id)
-        if stored_images:
-            pdf.ln(10)
-            pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(0, 8, f'STORED IMAGES SUMMARY ({len(stored_images)} images)', 0, 1, 'L')
-            
-            # Group images by type
-            image_types = {}
-            total_size = 0
-            
-            for img in stored_images:
-                img_type = img['image_type']
-                if img_type not in image_types:
-                    image_types[img_type] = {'count': 0, 'size': 0}
-                
-                image_types[img_type]['count'] += 1
-                image_types[img_type]['size'] += img.get('file_size', 0)
-                total_size += img.get('file_size', 0)
-            
-            headers = ['Image Type', 'Count', 'Total Size', 'Storage Location']
-            col_widths = [40, 20, 30, 95]
-            
-            pdf.create_table_header(headers, col_widths)
-            
-            for img_type, stats in image_types.items():
-                size_mb = stats['size'] / (1024 * 1024) if stats['size'] > 0 else 0
-                
-                row_data = [
-                    img_type.replace('_', ' ').title(),
-                    str(stats['count']),
-                    f"{size_mb:.1f} MB",
-                    f"images/{img_type}/"
-                ]
-                pdf.create_table_row(row_data, col_widths)
-            
-            pdf.ln(5)
-            total_size_mb = total_size / (1024 * 1024) if total_size > 0 else 0
-            pdf.set_font('Helvetica', 'B', 10)
-            pdf.cell(0, 6, f'Total Storage Used: {total_size_mb:.1f} MB', 0, 1, 'L')
-    
-    def _add_stored_images_info(self, pdf: 'EnhancedRoutePDF', images: List[Dict]):
-        """Add information about stored images"""
-        if not images:
-            return
+        # System status and recommendations
+        pdf.ln(15)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.info_color)
+        pdf.cell(0, 8, 'SYSTEM STATUS & RECOMMENDATIONS', 0, 1, 'L')
         
-        headers = ['Image File', 'Type', 'Location', 'Size', 'Date Created']
-        col_widths = [40, 25, 50, 25, 45]
+        system_recommendations = [
+            "* Monitor API response times to ensure optimal performance",
+            "* Implement retry mechanisms for failed API calls",
+            "* Cache frequently requested data to reduce API usage",
+            "* Set up monitoring alerts for API failures or slowdowns",
+            "* Consider backup API providers for critical services",
+            "* Regularly review API usage against rate limits and costs"
+        ]
         
-        pdf.create_table_header(headers, col_widths)
-        
-        for img in images:
-            size_kb = img.get('file_size', 0) / 1024 if img.get('file_size') else 0
-            created_date = img.get('created_at', '')[:16].replace('T', ' ')
-            
-            row_data = [
-                img['filename'][:20],
-                img['image_type'].replace('_', ' ').title(),
-                f"{img.get('latitude', 0):.4f}, {img.get('longitude', 0):.4f}",
-                f"{size_kb:.0f} KB",
-                created_date
-            ]
-            pdf.create_table_row(row_data, col_widths)
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for rec in system_recommendations:
+            pdf.cell(0, 6, rec, 0, 1, 'L')
 
 
 class EnhancedRoutePDF(FPDF):
-    """Enhanced PDF class with HPCL styling and utility methods"""
+    """Enhanced PDF class with Unicode handling"""
     
-    def __init__(self):
+    def __init__(self, pdf_generator):
         super().__init__()
+        self.pdf_generator = pdf_generator
         self.set_auto_page_break(auto=True, margin=15)
         
         # HPCL color scheme
@@ -977,37 +2233,67 @@ class EnhancedRoutePDF(FPDF):
         self.success_color = (40, 167, 69)
         self.info_color = (0, 82, 147)
     
+    def cell(self, w, h=0, txt='', border=0, ln=0, align='', fill=False, link=''):
+        """Override cell method to clean Unicode characters"""
+        if txt:
+            txt = self.pdf_generator.clean_text_for_pdf(str(txt))
+        return super().cell(w, h, txt, border, ln, align, fill, link)
+
+    def multi_cell(self, w, h, txt='', border=0, align='J', fill=False, split_only=False):
+        """Override multi_cell method to clean Unicode characters"""
+        if txt:
+            txt = self.pdf_generator.clean_text_for_pdf(str(txt))
+        return super().multi_cell(w, h, txt, border, align, fill, split_only)
+    
     def header(self):
-        """Page header with HPCL branding"""
+        """Enhanced page header with HPCL branding"""
         if self.page_no() == 1:
             return
         
+        # Header background
         self.set_fill_color(*self.primary_color)
-        self.rect(0, 0, 210, 22, 'F')
+        self.rect(0, 0, 210, 25, 'F')
         
-        self.set_font('Helvetica', 'B', 10)
+        # HPCL branding
+        self.set_font('Helvetica', 'B', 12)
         self.set_text_color(255, 255, 255)
-        self.set_xy(10, 7)
-        self.cell(0, 8, 'HPCL - Journey Risk Management Study (AI-Powered)', 0, 0, 'L')
+        self.set_xy(10, 8)
+        self.cell(0, 8, 'HPCL - Journey Risk Management Study (AI-Powered Analysis)', 0, 0, 'L')
         
-        self.set_xy(-40, 7)
+        # Page number
+        self.set_xy(-50, 8)
         self.cell(0, 8, f'Page {self.page_no()}', 0, 0, 'R')
         
-        self.ln(27)
+        # Date
+        self.set_xy(-80, 16)
+        self.set_font('Helvetica', '', 8)
+        self.cell(0, 5, datetime.datetime.now().strftime('%B %d, %Y'), 0, 0, 'R')
+        
+        self.ln(30)
     
     def footer(self):
-        """Page footer"""
-        self.set_y(-15)
+        """Enhanced page footer"""
+        self.set_y(-20)
+        
+        # Footer line
         self.set_draw_color(*self.primary_color)
+        self.set_line_width(0.5)
         self.line(10, self.get_y(), 200, self.get_y())
         
+        # Footer text
         self.set_font('Helvetica', 'I', 8)
         self.set_text_color(*self.primary_color)
+        self.set_y(-15)
+        self.cell(0, 5, 'Generated by HPCL Journey Risk Management System - Complete Enhanced Analysis', 0, 0, 'C')
+        
+        # Confidentiality notice
         self.set_y(-10)
-        self.cell(0, 5, 'Generated by HPCL Journey Risk Management System', 0, 0, 'C')
+        self.set_font('Helvetica', '', 7)
+        self.set_text_color(100, 100, 100)
+        self.cell(0, 5, 'CONFIDENTIAL - For Internal Use Only', 0, 0, 'C')
     
     def add_section_header(self, title: str, color_type: str = 'primary'):
-        """Add section header with color coding"""
+        """Add enhanced section header with professional styling"""
         colors = {
             'primary': self.primary_color,
             'danger': self.danger_color,
@@ -1021,64 +2307,85 @@ class EnhancedRoutePDF(FPDF):
         if self.get_y() > 250:
             self.add_page()
         
+        # Section header background
         self.set_font('Helvetica', 'B', 16)
         self.set_fill_color(*color)
         self.set_text_color(255, 255, 255)
-        self.rect(10, self.get_y(), 190, 15, 'F')
+        self.rect(10, self.get_y(), 190, 18, 'F')
         
-        self.set_xy(15, self.get_y() + 3)
-        self.cell(180, 9, title, 0, 1, 'L')
-        self.ln(5)
+        # Header text (will be automatically cleaned by overridden cell method)
+        self.set_xy(15, self.get_y() + 4)
+        self.cell(180, 10, title, 0, 1, 'L')
+        
+        # Decorative line
+        self.set_draw_color(*color)
+        self.set_line_width(1)
+        self.line(10, self.get_y(), 200, self.get_y())
+        
+        self.ln(8)
     
-    def create_simple_table(self, data: List[List[str]], col_widths: List[int]):
-        """Create a simple two-column table"""
+    def create_detailed_table(self, data: List[List[str]], col_widths: List[int]):
+        """Create detailed table with enhanced formatting and Unicode cleaning"""
         self.set_font('Helvetica', '', 10)
         self.set_text_color(0, 0, 0)
         
-        for row in data:
+        for i, row in enumerate(data):
             if self.get_y() > 260:
                 self.add_page()
             
             y_pos = self.get_y()
             
-            # First column (bold)
+            # Enhanced alternating colors
+            if i % 2 == 0:
+                self.set_fill_color(248, 249, 250)
+            else:
+                self.set_fill_color(255, 255, 255)
+            
+            # First column (bold) - text will be cleaned by overridden cell method
             self.set_font('Helvetica', 'B', 10)
             self.set_xy(10, y_pos)
-            self.cell(col_widths[0], 8, str(row[0])[:30], 1, 0, 'L')
+            self.cell(col_widths[0], 8, str(row[0])[:40], 1, 0, 'L', True)
             
-            # Second column
+            # Second column - text will be cleaned by overridden cell method
             self.set_font('Helvetica', '', 10)
             self.set_xy(10 + col_widths[0], y_pos)
-            self.cell(col_widths[1], 8, str(row[1])[:50], 1, 0, 'L')
+            self.cell(col_widths[1], 8, str(row[1])[:60], 1, 0, 'L', True)
             
             self.ln(8)
         
-        self.ln(3)
+        self.ln(5)
     
     def create_table_header(self, headers: List[str], col_widths: List[int]):
-        """Create table header"""
+        """Create enhanced table header with Unicode cleaning"""
         self.set_font('Helvetica', 'B', 9)
         self.set_fill_color(230, 230, 230)
         self.set_text_color(0, 0, 0)
+        self.set_draw_color(200, 200, 200)
         
         for i, (header, width) in enumerate(zip(headers, col_widths)):
             self.set_xy(10 + sum(col_widths[:i]), self.get_y())
-            self.cell(width, 10, header, 1, 0, 'C', True)
-        self.ln(10)
+            # Text will be cleaned by overridden cell method
+            self.cell(width, 12, header, 1, 0, 'C', True)
+        self.ln(12)
     
     def create_table_row(self, row_data: List[str], col_widths: List[int]):
-        """Create table row"""
+        """Create enhanced table row with Unicode cleaning"""
         if self.get_y() > 270:
             self.add_page()
         
         self.set_font('Helvetica', '', 8)
         self.set_fill_color(255, 255, 255)
         self.set_text_color(0, 0, 0)
+        self.set_draw_color(220, 220, 220)
         
         y_pos = self.get_y()
         
         for i, (cell, width) in enumerate(zip(row_data, col_widths)):
             self.set_xy(10 + sum(col_widths[:i]), y_pos)
-            self.cell(width, 8, str(cell)[:width//4], 1, 0, 'L')
+            # Adjust text length based on column width
+            max_chars = max(width//3, 8)
+            cell_text = str(cell)[:max_chars]
+            # Text will be cleaned by overridden cell method
+            self.cell(width, 8, cell_text, 1, 0, 'L', True)
         
         self.ln(8)
