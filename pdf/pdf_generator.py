@@ -52,7 +52,7 @@ class PDFGenerator:
             'weather': 'Weather Analysis', 
             'compliance': 'Regulatory Compliance',
             'elevation': 'Elevation Analysis',
-            'emergency': 'Emergency Planning',
+            'emergency': 'Emergency Preparedness & Response Planning',
             'route_map': 'Route Map with Critical Points',
             'images_summary': 'Images Summary',
             'traffic': 'Traffic Analysis',
@@ -2207,433 +2207,360 @@ class PDFGenerator:
         pdf.cell(0, 6, f"* Total ascent sections identified: {len([c for c in changes if c['type'] == 'ascent'])}", 0, 1, 'L')
         pdf.cell(0, 6, f"* Total descent sections identified: {len([c for c in changes if c['type'] == 'descent'])}", 0, 1, 'L')
     
+    # Fixed emergency page method for pdf_generator.py
+    # Replace your existing _add_emergency_page method with this improved version
+
     def _add_emergency_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add comprehensive emergency preparedness analysis WITH PHONE NUMBERS"""
+        """Add comprehensive emergency preparedness analysis with REAL DATA"""
+        from api.route_api import RouteAPI
+        route_api = RouteAPI(self.db_manager, None)
         
-        # First try to get data from new emergency_contacts table
-        try:
-            emergency_services = {
-                'hospitals': self.db_manager.get_emergency_contacts_by_type(route_id, 'hospital'),
-                'police_stations': self.db_manager.get_emergency_contacts_by_type(route_id, 'police_station'),
-                'fire_stations': self.db_manager.get_emergency_contacts_by_type(route_id, 'fire_station'),
-                'pharmacies': self.db_manager.get_emergency_contacts_by_type(route_id, 'pharmacy'),
-                'urgent_care': self.db_manager.get_emergency_contacts_by_type(route_id, 'urgent_care')
-            }
-            has_enhanced_data = any(len(services) > 0 for services in emergency_services.values())
-        except:
-            # Fallback to old POI system if new table doesn't exist
-            emergency_services = {
-                'hospitals': self.db_manager.get_pois_by_type(route_id, 'hospital'),
-                'police_stations': self.db_manager.get_pois_by_type(route_id, 'police'),
-                'fire_stations': self.db_manager.get_pois_by_type(route_id, 'fire_station'),
-                'pharmacies': [],  # Not in old system
-                'urgent_care': []   # Not in old system
-            }
-            has_enhanced_data = False
-
-        # Get communication analysis
-        try:
-            network_coverage = self.db_manager.get_network_coverage(route_id)
-            dead_zones = [point for point in network_coverage if point.get('is_dead_zone')]
-            comm_analysis = {
-                'communication_reliability': 'HIGH' if len(dead_zones) < 3 else 'MEDIUM' if len(dead_zones) < 6 else 'LOW',
-                'dead_zones': len(dead_zones),
-                'total_coverage_points': len(network_coverage)
-            }
-        except:
-            comm_analysis = {
-                'communication_reliability': 'UNKNOWN',
-                'dead_zones': 0,
-                'total_coverage_points': 0
-            }
-
-        # Calculate emergency preparedness score
-        total_hospitals = len(emergency_services['hospitals'])
-        total_police = len(emergency_services['police_stations'])
-        total_fire = len(emergency_services['fire_stations'])
-        total_pharmacies = len(emergency_services['pharmacies'])
+        # Try to get emergency data from the new emergency analyzer
+        emergency_data = self._get_emergency_data_from_db(route_id)
         
-        emergency_score = 100
-        critical_gaps = []
+        # Fallback to the old method if new data not available
+        if not emergency_data:
+            emergency_data = route_api.get_emergency_data(route_id)
         
-        if total_hospitals == 0:
-            emergency_score -= 30
-            critical_gaps.append("No medical facilities identified along route")
-        elif total_hospitals < 3:
-            emergency_score -= 15
+        if 'error' in emergency_data:
+            pdf.add_page()
+            pdf.add_section_header("EMERGENCY PREPAREDNESS ANALYSIS", "danger")
+            pdf.set_font('Helvetica', '', 12)
+            pdf.cell(0, 10, 'Emergency preparedness data not available.', 0, 1, 'L')
+            return
         
-        if total_police == 0:
-            emergency_score -= 20
-            critical_gaps.append("No police stations identified")
-        elif total_police < 2:
-            emergency_score -= 10
-        
-        if total_fire == 0:
-            emergency_score -= 20
-            critical_gaps.append("No fire stations identified")
-        elif total_fire < 2:
-            emergency_score -= 10
-        
-        if len(dead_zones) > 5:
-            emergency_score -= 20
-            critical_gaps.append("Multiple communication dead zones")
-        elif len(dead_zones) > 2:
-            emergency_score -= 10
-
-        # Start PDF page
         pdf.add_page()
         pdf.add_section_header("COMPREHENSIVE EMERGENCY PREPAREDNESS ANALYSIS", "danger")
-
-        # Emergency Preparedness Score Indicator
-        if emergency_score >= 80:
+        
+        # Get emergency preparedness assessment
+        if 'preparedness_assessment' in emergency_data:
+            # Old format data
+            assessment = emergency_data['preparedness_assessment']
+            score = assessment['emergency_score']
+            services = emergency_data.get('emergency_services', {})
+            comm_analysis = emergency_data.get('communication_analysis', {})
+        else:
+            # New format data from emergency analyzer
+            score = emergency_data.get('preparedness_score', 0)
+            services = emergency_data.get('emergency_facilities', {})
+            comm_analysis = emergency_data.get('coverage_analysis', {})
+            assessment = {
+                'emergency_score': score,
+                'preparedness_level': emergency_data.get('overall_assessment', 'UNKNOWN'),
+                'critical_gaps': emergency_data.get('critical_gaps', [])
+            }
+        
+        # Emergency Preparedness Score Display
+        if score >= 80:
             color = self.success_color
             status = "EXCELLENT PREPAREDNESS"
             icon = "[OK]"
-        elif emergency_score >= 60:
+        elif score >= 60:
             color = self.warning_color
-            status = "GOOD PREPAREDNESS"
+            status = "GOOD PREPAREDNESS" 
             icon = "[!]"
         else:
             color = self.danger_color
             status = "NEEDS IMPROVEMENT"
             icon = "[X]"
-
+        
         pdf.set_fill_color(*color)
         pdf.rect(10, pdf.get_y(), 190, 15, 'F')
         pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 14)
         pdf.set_xy(15, pdf.get_y() + 3)
-        pdf.cell(180, 9, f'{icon} EMERGENCY PREPAREDNESS: {status} (Score: {emergency_score}/100)', 0, 1, 'C')
-
-        # Emergency Services Availability Assessment
+        pdf.cell(180, 9, f'{icon} EMERGENCY PREPAREDNESS: {status} (Score: {score}/100)', 0, 1, 'C')
+        
+        # Emergency Services Availability
         pdf.ln(10)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font('Helvetica', 'B', 12)
         pdf.set_text_color(*self.primary_color)
         pdf.cell(0, 8, 'EMERGENCY SERVICES AVAILABILITY ASSESSMENT', 0, 1, 'L')
-
-        # Services summary table
-        services_table = [
-            ['Medical Facilities (Hospitals)', f"{total_hospitals} facilities identified"],
-            ['Law Enforcement (Police)', f"{total_police} stations identified"],
-            ['Fire & Rescue Services', f"{total_fire} stations identified"],
-            ['Pharmacies/Medical Support', f"{total_pharmacies} facilities identified"],
-            ['Communication Reliability', comm_analysis['communication_reliability']],
-            ['Network Dead Zones', f"{comm_analysis['dead_zones']} critical areas"],
-            ['Emergency Response Coverage', 'GOOD' if total_hospitals > 2 else 'MODERATE' if total_hospitals > 0 else 'LIMITED'],
-            ['Data Source', 'Enhanced API Integration' if has_enhanced_data else 'Standard POI Analysis']
-        ]
-
+        
+        # Handle both old and new data formats
+        if 'emergency_facilities' in emergency_data:
+            # New format from emergency analyzer
+            facilities = emergency_data['emergency_facilities']
+            services_table = [
+                ['Medical Facilities (Hospitals)', f"{len(facilities.get('hospital', []))} facilities identified"],
+                ['Law Enforcement (Police)', f"{len(facilities.get('police', []))} stations identified"],
+                ['Fire & Rescue Services', f"{len(facilities.get('fire_station', []))} stations identified"],
+                ['Emergency Clinics', f"{len(facilities.get('emergency_clinic', []))} clinics identified"],
+                ['Pharmacies (24hr)', f"{len(facilities.get('pharmacy', []))} pharmacies identified"],
+                ['Communication Reliability', comm_analysis.get('coverage_percentage', 'Unknown')],
+                ['Coverage Gaps', f"{len(comm_analysis.get('coverage_gaps', []))} areas"],
+                ['Overall Service Coverage', assessment.get('preparedness_level', 'Unknown')]
+            ]
+        else:
+            # Old format fallback
+            services_table = [
+                ['Medical Facilities (Hospitals)', f"{len(services.get('hospitals', []))} facilities identified"],
+                ['Law Enforcement (Police)', f"{len(services.get('police_stations', []))} stations identified"],
+                ['Fire & Rescue Services', f"{len(services.get('fire_stations', []))} stations identified"],
+                ['Communication Reliability', comm_analysis.get('communication_reliability', 'Unknown')],
+                ['Network Dead Zones', f"{comm_analysis.get('dead_zones', 0)} critical areas"],
+                ['Emergency Response Time', 'Variable - depends on location and traffic'],
+                ['Overall Service Coverage', 'GOOD' if len(services.get('hospitals', [])) > 2 else 'MODERATE']
+            ]
+        
         pdf.create_detailed_table(services_table, [80, 100])
-
+        
         # Critical Emergency Contact Numbers
         pdf.ln(15)
         pdf.set_font('Helvetica', 'B', 12)
         pdf.set_text_color(*self.danger_color)
         pdf.cell(0, 8, 'CRITICAL EMERGENCY CONTACT NUMBERS - MEMORIZE OR SAVE', 0, 1, 'L')
-
-        # National emergency contacts table
+        
+        # Enhanced emergency contacts table
         headers = ['Emergency Service', 'Contact Number', 'When to Call', 'Response Type']
         col_widths = [45, 30, 55, 55]
-
+        
         pdf.create_table_header(headers, col_widths)
-
-        national_contacts = [
+        
+        contact_details = [
             ('National Emergency', '112', 'Any life-threatening emergency', 'Police/Fire/Medical'),
             ('Police Emergency', '100', 'Crime, accidents, security threats', 'Law enforcement'),
             ('Fire Services', '101', 'Fire, rescue, hazmat incidents', 'Fire & rescue teams'),
             ('Medical Emergency', '108', 'Medical emergencies, injuries', 'Ambulance service'),
-            ('Highway Patrol', '1033', 'Highway accidents, breakdowns', 'Traffic police')
+            ('Highway Patrol', '1033', 'Highway accidents, breakdowns', 'Traffic police'),
+            ('Tourist Helpline', '1363', 'Tourist emergencies, assistance', 'Tourist support'),
+            ('Women Helpline', '1091', 'Women in distress, harassment', 'Women safety'),
+            ('Disaster Management', '1078', 'Natural disasters, evacuations', 'Disaster response')
         ]
-
-        for service, number, when, response in national_contacts:
+        
+        for service, number, when, response in contact_details:
             pdf.create_table_row([service, number, when, response], col_widths)
-
-        # ENHANCED: Emergency Facilities with Contact Details
-        if has_enhanced_data:
-            # NEW ENHANCED DATA WITH PHONE NUMBERS
-            pdf.add_page()
-            pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(*self.info_color)
-            pdf.cell(0, 8, 'EMERGENCY FACILITIES WITH CONTACT NUMBERS (API ENHANCED)', 0, 1, 'L')
-
-            # Medical Facilities with phone numbers
-            if emergency_services['hospitals']:
+        
+        # Emergency Services Along Route - ENHANCED
+        pdf.add_page()
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_text_color(*self.info_color)
+        pdf.cell(0, 8, 'EMERGENCY FACILITIES ALONG ROUTE WITH CONTACT DETAILS', 0, 1, 'L')
+        
+        # Get emergency facilities data
+        if 'emergency_facilities' in emergency_data:
+            facilities = emergency_data['emergency_facilities']
+            
+            # Medical Facilities
+            hospitals = facilities.get('hospital', [])
+            clinics = facilities.get('emergency_clinic', [])
+            all_medical = hospitals + clinics
+            
+            if all_medical:
                 pdf.ln(5)
                 pdf.set_font('Helvetica', 'B', 10)
                 pdf.set_text_color(*self.danger_color)
-                pdf.cell(0, 6, f'MEDICAL FACILITIES ({len(emergency_services["hospitals"])} identified):', 0, 1, 'L')
-
-                headers = ['#', 'Hospital Name', 'Phone Number', 'Address', 'Rating', '24/7']
-                col_widths = [10, 45, 35, 55, 20, 20]
-
+                pdf.cell(0, 6, f'MEDICAL FACILITIES ({len(all_medical)} identified):', 0, 1, 'L')
+                
+                headers = ['#', 'Facility Name', 'Address', 'Phone Number', 'Distance']
+                col_widths = [15, 50, 50, 40, 30]
+                
                 pdf.create_table_header(headers, col_widths)
-
-                for i, hospital in enumerate(emergency_services['hospitals'][:10], 1):
-                    phone = hospital.get('formatted_phone_number', 'Not available')
-                    if phone == 'Not available' and hospital.get('phone_number'):
-                        phone = hospital.get('phone_number')
-                    
-                    is_24_7 = 'Yes' if hospital.get('is_24_7') else 'No'
-                    rating = f"{hospital.get('rating', 0):.1f}★" if hospital.get('rating', 0) > 0 else 'N/A'
-
+                
+                for i, facility in enumerate(all_medical[:10], 1):
                     row_data = [
                         str(i),
-                        hospital.get('name', 'Unknown')[:25],
-                        phone[:20] if phone != 'Not available' else 'Call 108',
-                        hospital.get('address', 'Unknown')[:30],
-                        rating,
-                        is_24_7
+                        facility.get('name', 'Unknown Facility')[:25],
+                        facility.get('formatted_address', facility.get('address', 'Unknown'))[:25],
+                        facility.get('formatted_phone_number', 'Not available'),
+                        f"{facility.get('distance_km', 0):.1f} km"
                     ]
                     pdf.create_table_row(row_data, col_widths)
-
-            # Police stations with phone numbers
-            if emergency_services['police_stations']:
+            
+            # Police Stations
+            police_stations = facilities.get('police', [])
+            if police_stations:
                 pdf.ln(10)
                 pdf.set_font('Helvetica', 'B', 10)
                 pdf.set_text_color(*self.primary_color)
-                pdf.cell(0, 6, f'POLICE STATIONS ({len(emergency_services["police_stations"])} identified):', 0, 1, 'L')
-
-                headers = ['#', 'Police Station', 'Phone Number', 'Address', 'Distance']
-                col_widths = [10, 50, 35, 55, 25]
-
+                pdf.cell(0, 6, f'POLICE STATIONS ({len(police_stations)} identified):', 0, 1, 'L')
+                
+                headers = ['#', 'Police Station', 'Address', 'Phone Number', 'Distance']
+                col_widths = [15, 50, 50, 40, 30]
+                
                 pdf.create_table_header(headers, col_widths)
-
-                for i, station in enumerate(emergency_services['police_stations'][:8], 1):
-                    phone = station.get('formatted_phone_number', 'Call 100')
-                    if phone == 'Call 100' and station.get('phone_number'):
-                        phone = station.get('phone_number')
-                    
-                    distance = f"{station.get('distance_from_route', 0):.1f}km" if station.get('distance_from_route') else 'Along route'
-
+                
+                for i, station in enumerate(police_stations[:8], 1):
                     row_data = [
                         str(i),
-                        station.get('name', 'Unknown')[:28],
-                        phone[:20],
-                        station.get('address', 'Unknown')[:30],
-                        distance
+                        station.get('name', 'Unknown Station')[:25],
+                        station.get('formatted_address', station.get('address', 'Unknown'))[:25],
+                        station.get('formatted_phone_number', 'Not available'),
+                        f"{station.get('distance_km', 0):.1f} km"
                     ]
                     pdf.create_table_row(row_data, col_widths)
-
-            # Fire stations
-            if emergency_services['fire_stations']:
+            
+            # Fire Stations
+            fire_stations = facilities.get('fire_station', [])
+            if fire_stations:
                 pdf.ln(10)
                 pdf.set_font('Helvetica', 'B', 10)
                 pdf.set_text_color(*self.warning_color)
-                pdf.cell(0, 6, f'FIRE & RESCUE STATIONS ({len(emergency_services["fire_stations"])} identified):', 0, 1, 'L')
-
-                headers = ['#', 'Fire Station', 'Phone Number', 'Address', 'Services']
-                col_widths = [10, 50, 35, 55, 25]
-
+                pdf.cell(0, 6, f'FIRE STATIONS ({len(fire_stations)} identified):', 0, 1, 'L')
+                
+                headers = ['#', 'Fire Station', 'Address', 'Phone Number', 'Distance']
+                col_widths = [15, 50, 50, 40, 30]
+                
                 pdf.create_table_header(headers, col_widths)
-
-                for i, station in enumerate(emergency_services['fire_stations'][:6], 1):
-                    phone = station.get('formatted_phone_number', 'Call 101')
-                    if phone == 'Call 101' and station.get('phone_number'):
-                        phone = station.get('phone_number')
-
+                
+                for i, station in enumerate(fire_stations[:8], 1):
                     row_data = [
                         str(i),
-                        station.get('name', 'Unknown')[:28],
-                        phone[:20],
-                        station.get('address', 'Unknown')[:30],
-                        'Fire/Rescue'
+                        station.get('name', 'Unknown Station')[:25],
+                        station.get('formatted_address', station.get('address', 'Unknown'))[:25],
+                        station.get('formatted_phone_number', 'Not available'),
+                        f"{station.get('distance_km', 0):.1f} km"
                     ]
                     pdf.create_table_row(row_data, col_widths)
-
-            # Pharmacies (if available)
-            if emergency_services['pharmacies']:
-                pdf.ln(10)
-                pdf.set_font('Helvetica', 'B', 10)
-                pdf.set_text_color(*self.success_color)
-                pdf.cell(0, 6, f'PHARMACIES & MEDICAL SUPPORT ({len(emergency_services["pharmacies"])} identified):', 0, 1, 'L')
-
-                headers = ['#', 'Pharmacy Name', 'Phone Number', 'Address', 'Hours']
-                col_widths = [10, 50, 35, 55, 25]
-
-                pdf.create_table_header(headers, col_widths)
-
-                for i, pharmacy in enumerate(emergency_services['pharmacies'][:6], 1):
-                    phone = pharmacy.get('formatted_phone_number', 'Not available')
-                    if phone == 'Not available' and pharmacy.get('phone_number'):
-                        phone = pharmacy.get('phone_number')
-                    
-                    hours = 'Check hours' if not pharmacy.get('is_24_7') else '24/7'
-
-                    row_data = [
-                        str(i),
-                        pharmacy.get('name', 'Unknown')[:28],
-                        phone[:20] if phone != 'Not available' else 'N/A',
-                        pharmacy.get('address', 'Unknown')[:30],
-                        hours
-                    ]
-                    pdf.create_table_row(row_data, col_widths)
-
-        else:
-            # FALLBACK: Standard POI data without phone numbers
-            pdf.add_page()
-            pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(*self.info_color)
-            pdf.cell(0, 8, 'EMERGENCY FACILITIES ALONG ROUTE (STANDARD ANALYSIS)', 0, 1, 'L')
-
-            # Show standard POI data
-            for facility_type, facilities in emergency_services.items():
-                if facilities and facility_type in ['hospitals', 'police_stations', 'fire_stations']:
-                    pdf.ln(10)
-                    pdf.set_font('Helvetica', 'B', 10)
-                    pdf.set_text_color(*self.primary_color)
-                    display_name = facility_type.replace('_', ' ').title()
-                    pdf.cell(0, 6, f'{display_name} ({len(facilities)} identified):', 0, 1, 'L')
-
-                    headers = ['#', 'Facility Name', 'Location', 'Emergency Contact', 'Notes']
-                    col_widths = [15, 55, 50, 35, 30]
-
-                    pdf.create_table_header(headers, col_widths)
-
-                    for i, facility in enumerate(facilities[:8], 1):
-                        emergency_number = '108' if 'hospital' in facility_type else '100' if 'police' in facility_type else '101'
-                        
-                        row_data = [
-                            str(i),
-                            facility.get('name', 'Unknown')[:30],
-                            facility.get('address', 'Along route')[:25],
-                            f'Call {emergency_number}',
-                            'Standard service'
-                        ]
-                        pdf.create_table_row(row_data, col_widths)
-
-        # Enhanced Emergency Contact Card
-        if pdf.get_y() + 80 > 270:  # Check space
-            pdf.add_page()
-
-        pdf.ln(15)
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.set_text_color(*self.danger_color)
-        pdf.cell(0, 8, 'EMERGENCY CONTACT CARD - PRINT AND CARRY', 0, 1, 'L')
-
-        # Create emergency contact card with enhanced styling
-        pdf.set_fill_color(255, 245, 245)
-        pdf.set_draw_color(*self.danger_color)
-        pdf.set_line_width(2)
-        pdf.rect(10, pdf.get_y(), 190, 80, 'DF')
-
-        contact_info = [
-            'CRITICAL EMERGENCY NUMBERS:',
-            '🚨 NATIONAL EMERGENCY: 112 (Police/Fire/Medical)',
-            '👮 POLICE: 100',
-            '🚒 FIRE: 101',
-            '🚑 AMBULANCE: 108',
-            '🛣️ HIGHWAY PATROL: 1033'
-        ]
-
-        # Add nearest facility numbers if available
-        if has_enhanced_data:
-            if emergency_services['hospitals']:
-                nearest_hospital = emergency_services['hospitals'][0]
-                if nearest_hospital.get('formatted_phone_number'):
-                    contact_info.append(f"🏥 NEAREST HOSPITAL: {nearest_hospital['formatted_phone_number']}")
-                    contact_info.append(f"   {nearest_hospital.get('name', 'Unknown')[:40]}")
-
-            if emergency_services['police_stations']:
-                nearest_police = emergency_services['police_stations'][0]
-                if nearest_police.get('formatted_phone_number'):
-                    contact_info.append(f"👮 NEAREST POLICE: {nearest_police['formatted_phone_number']}")
-                    contact_info.append(f"   {nearest_police.get('name', 'Unknown')[:40]}")
-
-        pdf.set_font('Helvetica', 'B', 9)
-        pdf.set_text_color(0, 0, 0)
-        y_start = pdf.get_y() + 8
-
-        for i, contact in enumerate(contact_info[:10]):  # Limit to fit in card
-            pdf.set_xy(15, y_start + (i * 7))
-            if i == 0:  # Header
-                pdf.set_font('Helvetica', 'B', 10)
-            else:
-                pdf.set_font('Helvetica', 'B', 9)
-            pdf.cell(0, 6, contact, 0, 1, 'L')
-
+        
         # Critical Preparedness Gaps
-        if critical_gaps:
+        gaps = assessment.get('critical_gaps', [])
+        if gaps:
             pdf.ln(15)
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(*self.danger_color)
-            pdf.cell(0, 8, f'CRITICAL PREPAREDNESS GAPS ({len(critical_gaps)} identified)', 0, 1, 'L')
-
+            pdf.cell(0, 8, f'CRITICAL PREPAREDNESS GAPS ({len(gaps)} identified)', 0, 1, 'L')
+            
             pdf.set_font('Helvetica', '', 10)
             pdf.set_text_color(0, 0, 0)
-            for i, gap in enumerate(critical_gaps, 1):
+            for i, gap in enumerate(gaps, 1):
                 pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
                 pdf.multi_cell(172, 6, f"{gap} - Address before travel", 0, 'L')
                 pdf.ln(2)
-
+        
         # Emergency Preparedness Checklist
         pdf.ln(10)
         pdf.set_font('Helvetica', 'B', 12)
         pdf.set_text_color(*self.primary_color)
-        pdf.cell(0, 8, 'EMERGENCY PREPAREDNESS CHECKLIST', 0, 1, 'L')
-
+        pdf.cell(0, 8, 'COMPREHENSIVE EMERGENCY PREPAREDNESS CHECKLIST', 0, 1, 'L')
+        
         checklist = [
-            "☐ First aid kit with bandages, antiseptic, pain relievers",
-            "☐ Emergency contact numbers saved in phone and written backup",
-            "☐ Vehicle emergency kit - tools, spare tire, jumper cables",
-            "☐ Emergency water supply (minimum 2 liters per person)",
-            "☐ Non-perishable emergency food (energy bars, nuts)",
-            "☐ Flashlight with extra batteries or hand-crank model",
-            "☐ Emergency blanket or warm clothing",
-            "☐ Portable phone charger or power bank",
-            "☐ Emergency cash in small denominations",
-            "☐ Vehicle documents in waterproof container",
-            "☐ Road atlas or offline maps as backup",
-            "☐ Emergency whistle for signaling help"
+            "[] First aid kit with bandages, antiseptic, pain relievers, emergency medications",
+            "[] Emergency contact numbers saved in phone and written backup copy",
+            "[] Vehicle emergency kit - tools, spare tire, jumper cables, tow rope",
+            "[] Emergency water supply (minimum 2 liters per person for 24 hours)",
+            "[] Non-perishable emergency food (energy bars, nuts, dried fruits)",
+            "[] Flashlight with extra batteries or hand-crank/solar powered model",
+            "[] Emergency blanket, warm clothing, and weatherproof gear",
+            "[] Portable phone charger/power bank with multiple cables",
+            "[] Emergency cash in small denominations (ATMs may be unavailable)",
+            "[] Vehicle documents in waterproof container (registration, insurance)",
+            "[] Road atlas or offline maps as backup to GPS navigation",
+            "[] Emergency whistle, signal mirror, or flares for signaling help",
+            "[] Multi-tool or knife, duct tape, and basic repair supplies",
+            "[] Personal medications for at least 3 days",
+            "[] Important documents (ID, medical info, emergency contacts)",
+            "[] Fire extinguisher (small vehicle type) and basic safety equipment"
         ]
-
-        pdf.set_font('Helvetica', '', 9)
+        
+        pdf.set_font('Helvetica', '', 10)
         pdf.set_text_color(0, 0, 0)
         for item in checklist:
-            if pdf.get_y() + 8 > 280:  # Check for page break
-                pdf.add_page()
-                pdf.set_font('Helvetica', 'B', 10)
-                pdf.set_text_color(*self.primary_color)
-                pdf.cell(0, 6, 'EMERGENCY PREPAREDNESS CHECKLIST (CONTINUED)', 0, 1, 'L')
-                pdf.set_font('Helvetica', '', 9)
-                pdf.set_text_color(0, 0, 0)
-            
             pdf.cell(0, 6, item, 0, 1, 'L')
-
-        # Emergency Communication Plan
+        
+        # Emergency Response Plan
         pdf.ln(10)
         pdf.set_font('Helvetica', 'B', 12)
-        pdf.set_text_color(*self.warning_color)
-        pdf.cell(0, 8, 'EMERGENCY COMMUNICATION STRATEGY', 0, 1, 'L')
-
-        comm_plan = [
-            "• Download offline maps before travel (Google Maps, Maps.me)",
-            "• Inform someone of your route and expected arrival time",
-            "• Share live location with trusted contacts during travel",
-            f"• Be aware of {comm_analysis['dead_zones']} communication dead zones on route",
-            "• Consider satellite communication device for remote areas",
-            "• Keep emergency numbers saved in multiple devices",
-            "• Use highway emergency phones when available",
-            "• Identify nearest hospitals and police stations before departure"
+        pdf.set_text_color(*self.danger_color)
+        pdf.cell(0, 8, 'EMERGENCY RESPONSE ACTION PLAN', 0, 1, 'L')
+        
+        action_plan = [
+            "1. ASSESS THE SITUATION - Ensure personal safety first, then assess severity",
+            "2. CALL FOR HELP - Dial appropriate emergency number (112 for general emergencies)",
+            "3. PROVIDE LOCATION - Give precise GPS coordinates or landmark descriptions",
+            "4. STAY CALM - Speak clearly and provide requested information to operators",
+            "5. FOLLOW INSTRUCTIONS - Emergency operators are trained to guide you",
+            "6. SIGNAL FOR HELP - Use emergency signals if phone coverage is unavailable",
+            "7. STAY WITH VEHICLE - Unless immediate danger, stay near your vehicle",
+            "8. CONSERVE RESOURCES - Ration water, food, and phone battery if stranded",
+            "9. MAINTAIN COMMUNICATION - Update emergency contacts on your status",
+            "10. DOCUMENT INCIDENT - Take photos/notes for insurance and authorities"
         ]
-
-        pdf.set_font('Helvetica', '', 9)
+        
+        pdf.set_font('Helvetica', '', 10)
         pdf.set_text_color(0, 0, 0)
-        for plan in comm_plan:
-            if pdf.get_y() + 8 > 280:
-                break
-            pdf.cell(0, 6, plan, 0, 1, 'L')
+        for step in action_plan:
+            pdf.cell(0, 6, step, 0, 1, 'L')
 
-        # Data enhancement notice
-        pdf.ln(10)
-        if has_enhanced_data:
-            pdf.set_font('Helvetica', 'I', 8)
-            pdf.set_text_color(100, 100, 100)
-            pdf.cell(0, 5, '* Enhanced data includes real phone numbers and contact details from Google Places API', 0, 1, 'L')
-        else:
-            pdf.set_font('Helvetica', 'I', 8)
-            pdf.set_text_color(100, 100, 100)
-            pdf.cell(0, 5, '* For enhanced contact details, enable Google Places API and emergency analyzer', 0, 1, 'L')
+    def _get_emergency_data_from_db(self, route_id: str) -> Dict:
+        """Get emergency data from the new emergency analyzer database"""
+        try:
+            import sqlite3
+            
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Check if emergency analysis table exists
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='emergency_analysis'")
+                if not cursor.fetchone():
+                    return {}
+                
+                cursor.execute("SELECT * FROM emergency_analysis WHERE route_id = ?", (route_id,))
+                facilities_data = [dict(row) for row in cursor.fetchall()]
+                
+                if not facilities_data:
+                    return {}
+                
+                # Group facilities by type
+                emergency_facilities = {}
+                for facility in facilities_data:
+                    facility_type = facility['facility_type']
+                    if facility_type not in emergency_facilities:
+                        emergency_facilities[facility_type] = []
+                    
+                    # Parse additional data
+                    additional_data = {}
+                    try:
+                        additional_data = json.loads(facility.get('additional_data', '{}'))
+                    except:
+                        pass
+                    
+                    facility_info = {
+                        'name': facility['facility_name'],
+                        'latitude': facility['latitude'],
+                        'longitude': facility['longitude'],
+                        'formatted_address': facility.get('formatted_address', ''),
+                        'formatted_phone_number': facility.get('formatted_phone_number', ''),
+                        'international_phone_number': facility.get('international_phone_number', ''),
+                        'website': facility.get('website', ''),
+                        'rating': facility.get('rating', 0),
+                        'operational_status': facility.get('operational_status', 'UNKNOWN'),
+                        'distance_km': facility.get('distance_km', 0),
+                        'priority_level': facility.get('priority_level', 5)
+                    }
+                    
+                    emergency_facilities[facility_type].append(facility_info)
+                
+                # Calculate summary statistics
+                total_facilities = len(facilities_data)
+                preparedness_score = min(100, total_facilities * 5)  # Simple scoring
+                
+                # Identify gaps
+                critical_gaps = []
+                if 'hospital' not in emergency_facilities:
+                    critical_gaps.append("No hospitals found along route")
+                if 'police' not in emergency_facilities:
+                    critical_gaps.append("No police stations identified")
+                if 'fire_station' not in emergency_facilities:
+                    critical_gaps.append("No fire stations found")
+                
+                return {
+                    'emergency_facilities': emergency_facilities,
+                    'preparedness_score': preparedness_score,
+                    'total_facilities': total_facilities,
+                    'critical_gaps': critical_gaps,
+                    'overall_assessment': 'EXCELLENT' if preparedness_score >= 80 else 'GOOD' if preparedness_score >= 60 else 'NEEDS IMPROVEMENT',
+                    'coverage_analysis': {
+                        'coverage_percentage': f"{min(100, preparedness_score)}%",
+                        'coverage_gaps': []
+                    }
+                }
+                
+        except Exception as e:
+            print(f"Error getting emergency data from database: {e}")
+            return {}
     
     def _add_route_map_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
         """Add comprehensive route map with FIXED legend table layout"""

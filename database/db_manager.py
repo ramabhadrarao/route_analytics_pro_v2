@@ -239,21 +239,21 @@ class DatabaseManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     route_id TEXT NOT NULL,
                     facility_type TEXT NOT NULL,
-                    name TEXT NOT NULL,
+                    facility_name TEXT NOT NULL,
                     latitude REAL NOT NULL,
                     longitude REAL NOT NULL,
-                    address TEXT,
-                    phone_number TEXT,
-                    formatted_phone TEXT,
-                    international_phone TEXT,
-                    website TEXT, 
-                    detailed_address TEXT,
+                    formatted_address TEXT,
+                    formatted_phone_number TEXT,
+                    international_phone_number TEXT,
+                    website TEXT,
                     opening_hours TEXT,
-                    place_id TEXT,
                     rating REAL,
-                    types TEXT,
-                    additional_info TEXT,
+                    user_ratings_total INTEGER,
+                    business_status TEXT,
+                    emergency_services TEXT,
                     distance_from_route REAL,
+                    place_id TEXT,
+                    additional_info TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (route_id) REFERENCES routes (id)
                 )
@@ -655,45 +655,98 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting stored images: {e}")
             return []
-    def store_emergency_contacts(self, route_id: str, emergency_facilities: List[Dict]) -> bool:
-        """Store emergency facilities with detailed contact information"""
+    def store_emergency_contacts(self, route_id: str, emergency_data: Dict) -> bool:
+        """Store emergency contacts/facilities data in database"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                for facility in emergency_facilities:
-                    cursor.execute("""
-                        INSERT OR REPLACE INTO emergency_contacts 
-                        (route_id, place_id, facility_type, name, phone_number, 
-                        formatted_phone, international_phone, address, latitude, longitude, 
-                        rating, opening_hours, website, distance_from_route)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        route_id,
-                        facility['place_id'],
-                        facility['facility_type'],
-                        facility['name'],
-                        facility.get('phone_number'),
-                        facility.get('formatted_phone_number'),
-                        facility.get('international_phone_number'),
-                        facility['address'],
-                        facility['latitude'],
-                        facility['longitude'],
-                        facility.get('rating', 0),
-                        json.dumps(facility.get('opening_hours', {})),
-                        facility.get('website'),
-                        facility.get('distance_from_route', 0)
-                    ))
+                stored_count = 0
+                
+                # Process different types of emergency facilities
+                emergency_types = {
+                    'hospitals': 'hospital',
+                    'police_stations': 'police',
+                    'fire_stations': 'fire_station',
+                    'emergency_clinics': 'emergency_clinic',
+                    'ambulance_services': 'ambulance'
+                }
+                
+                for data_key, facility_type in emergency_types.items():
+                    facilities = emergency_data.get(data_key, [])
+                    
+                    for facility in facilities:
+                        try:
+                            # Prepare additional info as JSON
+                            additional_info = {
+                                'types': facility.get('types', []),
+                                'vicinity': facility.get('vicinity', ''),
+                                'photos': facility.get('photos', []),
+                                'price_level': facility.get('price_level'),
+                                'google_data': facility.get('google_data', {})
+                            }
+                            
+                            cursor.execute("""
+                                INSERT INTO emergency_contacts 
+                                (route_id, facility_type, facility_name, latitude, longitude,
+                                formatted_address, formatted_phone_number, international_phone_number,
+                                website, opening_hours, rating, user_ratings_total, business_status,
+                                emergency_services, distance_from_route, place_id, additional_info)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                route_id,
+                                facility_type,
+                                facility.get('name', 'Unknown Facility'),
+                                facility.get('latitude', 0),
+                                facility.get('longitude', 0),
+                                facility.get('formatted_address', facility.get('address', '')),
+                                facility.get('formatted_phone_number', ''),
+                                facility.get('international_phone_number', ''),
+                                facility.get('website', ''),
+                                json.dumps(facility.get('opening_hours', {})),
+                                facility.get('rating', 0),
+                                facility.get('user_ratings_total', 0),
+                                facility.get('business_status', ''),
+                                facility_type.replace('_', ' ').title(),
+                                facility.get('distance_from_route', 0),
+                                facility.get('place_id', ''),
+                                json.dumps(additional_info)
+                            ))
+                            stored_count += 1
+                            
+                        except Exception as e:
+                            print(f"Error storing emergency facility: {e}")
+                            continue
                 
                 conn.commit()
+                print(f"✅ Stored {stored_count} emergency contacts in database")
                 return True
                 
         except Exception as e:
-            print(f"Error storing emergency contacts: {e}")
+            print(f"❌ Error storing emergency contacts: {e}")
             return False
 
+    def get_emergency_contacts(self, route_id: str) -> List[Dict]:
+        """Get emergency contacts for a specific route"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT * FROM emergency_contacts 
+                    WHERE route_id = ?
+                    ORDER BY facility_type, distance_from_route
+                """, (route_id,))
+                
+                return [dict(row) for row in cursor.fetchall()]
+                
+        except Exception as e:
+            print(f"Error getting emergency contacts: {e}")
+            return []
+
     def get_emergency_contacts_by_type(self, route_id: str, facility_type: str) -> List[Dict]:
-        """Get emergency contacts by facility type with phone numbers"""
+        """Get emergency contacts of specific type"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
@@ -708,5 +761,70 @@ class DatabaseManager:
                 return [dict(row) for row in cursor.fetchall()]
                 
         except Exception as e:
-            print(f"Error getting emergency contacts: {e}")
+            print(f"Error getting emergency contacts by type: {e}")
             return []
+
+    def get_emergency_statistics(self, route_id: str) -> Dict:
+        """Get emergency preparedness statistics for a route"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Count facilities by type
+                cursor.execute("""
+                    SELECT facility_type, COUNT(*) as count
+                    FROM emergency_contacts 
+                    WHERE route_id = ?
+                    GROUP BY facility_type
+                """, (route_id,))
+                
+                facility_counts = {row['facility_type']: row['count'] for row in cursor.fetchall()}
+                
+                # Calculate preparedness score
+                preparedness_score = self._calculate_emergency_preparedness_score(facility_counts)
+                
+                # Get closest facilities
+                cursor.execute("""
+                    SELECT facility_type, facility_name, distance_from_route, formatted_phone_number
+                    FROM emergency_contacts 
+                    WHERE route_id = ?
+                    ORDER BY distance_from_route
+                    LIMIT 5
+                """, (route_id,))
+                
+                closest_facilities = [dict(row) for row in cursor.fetchall()]
+                
+                return {
+                    'facility_counts': facility_counts,
+                    'preparedness_score': preparedness_score,
+                    'closest_facilities': closest_facilities,
+                    'total_facilities': sum(facility_counts.values()),
+                    'has_medical': facility_counts.get('hospital', 0) > 0,
+                    'has_police': facility_counts.get('police', 0) > 0,
+                    'has_fire': facility_counts.get('fire_station', 0) > 0
+                }
+                
+        except Exception as e:
+            print(f"Error getting emergency statistics: {e}")
+            return {}
+
+    def _calculate_emergency_preparedness_score(self, facility_counts: Dict) -> int:
+        """Calculate emergency preparedness score based on available facilities"""
+        score = 0
+        
+        # Critical facilities (higher weight)
+        if facility_counts.get('hospital', 0) > 0:
+            score += 30
+        if facility_counts.get('police', 0) > 0:
+            score += 25
+        if facility_counts.get('fire_station', 0) > 0:
+            score += 25
+        
+        # Additional facilities
+        if facility_counts.get('emergency_clinic', 0) > 0:
+            score += 15
+        if facility_counts.get('ambulance', 0) > 0:
+            score += 5
+        
+        return min(100, score)

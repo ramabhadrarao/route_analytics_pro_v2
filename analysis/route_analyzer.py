@@ -136,31 +136,39 @@ class RouteAnalyzer:
             if traffic_data:
                 self._store_traffic_data(route_id, traffic_data)
             
-            # Step 11: Generate comprehensive map WITH ALL MARKERS
+            # Step 11: Road Quality Analysis
+            if self.road_quality_analyzer:
+                print("🛣️ Analyzing road quality...")
+                road_quality_data = self.road_quality_analyzer.analyze_road_conditions(route_points, route_id)
+                if road_quality_data:
+                    self.road_quality_analyzer.store_road_quality_data(route_id, road_quality_data)
+            
+            # Step 12: Environmental Risk Analysis  
+            if self.environmental_analyzer:
+                print("🌍 Analyzing environmental risks...")
+                environmental_data = self.environmental_analyzer.analyze_environmental_risks(route_points, route_id)
+                if environmental_data:
+                    self.environmental_analyzer.store_environmental_data(route_id, environmental_data)
+            
+            # Step 13: Emergency Response Analysis - NEW!
+            if self.emergency_analyzer:
+                print("🚨 Analyzing emergency preparedness...")
+                emergency_data = self.emergency_analyzer.analyze_emergency_preparedness(route_points, route_id)
+                if emergency_data:
+                    self.emergency_analyzer.store_emergency_data(route_id, emergency_data)
+            
+            # Step 14: Generate comprehensive map WITH ALL MARKERS
             print("🗺️ Generating comprehensive route map with ALL critical points...")
             self._generate_and_store_route_map(route_id, route_points, sharp_turns)
-            # Step 11: Road Quality Analysis
-            print("🛣️ Analyzing road quality...")
-            road_quality_data = self.road_quality_analyzer.analyze_road_conditions(route_points, route_id)
-            if road_quality_data:
-                self.road_quality_analyzer.store_road_quality_data(route_id, road_quality_data)
-            # ADD AFTER STEP 12: Emergency Facilities Analysis
-            print("🚨 Analyzing emergency facilities with contact details...")
-            if hasattr(self, 'emergency_analyzer'):
-                emergency_data = self.emergency_analyzer.analyze_emergency_facilities(route_points, route_id)
-                if emergency_data:
-                    print(f"📞 Emergency analysis completed with contact information")
-            # Step 12: Environmental Risk Analysis  
-            print("🌍 Analyzing environmental risks...")
-            environmental_data = self.environmental_analyzer.analyze_environmental_risks(route_points, route_id)
-            if environmental_data:
-                self.environmental_analyzer.store_environmental_data(route_id, environmental_data)
-            print(f"✅ Route analysis completed successfully. Route ID: {route_id}")
+            
+            print(f"✅ Complete route analysis finished successfully. Route ID: {route_id}")
+            print(f"📊 Analysis included: Sharp turns, POIs, Weather, Network, Traffic, Road Quality, Environmental, Emergency")
             return route_id
             
-
         except Exception as e:
             print(f"❌ Route analysis failed: {e}")
+            import traceback
+            traceback.print_exc()
             return None
         finally:
             # Cleanup uploaded file
