@@ -34,6 +34,14 @@ try:
 except ImportError as e:
     print(f"⚠️ Environmental Risk Analyzer not available: {e}")
     ENVIRONMENTAL_AVAILABLE = False
+
+try:
+    from .emergency_analyzer import EmergencyResponseAnalyzer
+    EMERGENCY_AVAILABLE = True
+    print("✅ Emergency Response Analyzer imported successfully")
+except ImportError as e:
+    print(f"⚠️ Emergency Response Analyzer not available: {e}")
+    EMERGENCY_AVAILABLE = False
 class RouteAnalyzer:
     """Complete route analysis with API integration and data storage"""
     
@@ -51,6 +59,14 @@ class RouteAnalyzer:
         except ImportError as e:
             print(f"⚠️ Emergency Facilities Analyzer not available: {e}")
             EMERGENCY_AVAILABLE = False
+
+        if EMERGENCY_AVAILABLE:
+            self.emergency_analyzer = EmergencyResponseAnalyzer(api_tracker)
+            print("🚨 Emergency Response Analyzer initialized")
+        else:
+            self.emergency_analyzer = None
+            print("⚠️ Emergency Response Analyzer not available - will use basic emergency collection")
+        
         # Initialize API clients
         self.google_api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
         self.openweather_api_key = os.environ.get('OPENWEATHER_API_KEY')
