@@ -112,7 +112,13 @@ class RouteAnalysisApp:
             return render_template('dashboard.html', 
                                  recent_routes=recent_routes,
                                  api_status=api_status)
-        
+        @self.app.route('/api/routes/<route_id>/emergency-contacts')
+        def route_emergency_contacts(route_id):
+            """Get emergency contacts with phone numbers"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            return jsonify(self.route_api.get_emergency_contacts(route_id))
         @self.app.route('/upload-csv', methods=['POST'])
         def upload_csv():
             """Handle CSV upload and route analysis"""

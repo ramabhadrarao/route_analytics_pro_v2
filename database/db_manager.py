@@ -195,8 +195,100 @@ class DatabaseManager:
                 )
             """)
             
+            # Road quality data (from your enhanced system)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS road_quality_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    route_id TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    issue_type TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    confidence TEXT NOT NULL,
+                    description TEXT,
+                    recommended_speed INTEGER,
+                    api_sources TEXT,
+                    analysis_details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (route_id) REFERENCES routes (id)
+                )
+            """)
+            
+            # Environmental risks data (from your enhanced system)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS environmental_risks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    route_id TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    risk_category TEXT NOT NULL,
+                    risk_type TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    description TEXT,
+                    recommendations TEXT,
+                    source_api TEXT,
+                    additional_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (route_id) REFERENCES routes (id)
+                )
+            """)
+            
+            # NEW EMERGENCY CONTACTS TABLE
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS emergency_contacts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    route_id TEXT NOT NULL,
+                    place_id TEXT,
+                    facility_type TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    phone_number TEXT,
+                    formatted_phone_number TEXT,
+                    international_phone_number TEXT,
+                    address TEXT,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    rating REAL,
+                    opening_hours TEXT,
+                    website TEXT,
+                    distance_from_route REAL,
+                    is_emergency_service BOOLEAN DEFAULT 1,
+                    is_24_7 BOOLEAN DEFAULT 0,
+                    verified_phone BOOLEAN DEFAULT 0,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (route_id) REFERENCES routes (id),
+                    UNIQUE(route_id, place_id)
+                )
+            """)
+            
+            # SAFE COLUMN ADDITIONS TO EXISTING POIS TABLE
+            # Check existing columns first
+            cursor.execute("PRAGMA table_info(pois)")
+            existing_columns = [column[1] for column in cursor.fetchall()]
+            
+            # Only add columns that don't exist
+            if 'phone_number' not in existing_columns:
+                try:
+                    cursor.execute("ALTER TABLE pois ADD COLUMN phone_number TEXT")
+                    print("✅ Added phone_number column to pois table")
+                except sqlite3.OperationalError as e:
+                    print(f"⚠️ Could not add phone_number column: {e}")
+            
+            if 'place_id' not in existing_columns:
+                try:
+                    cursor.execute("ALTER TABLE pois ADD COLUMN place_id TEXT")
+                    print("✅ Added place_id column to pois table")
+                except sqlite3.OperationalError as e:
+                    print(f"⚠️ Could not add place_id column: {e}")
+            
+            if 'rating' not in existing_columns:
+                try:
+                    cursor.execute("ALTER TABLE pois ADD COLUMN rating REAL")
+                    print("✅ Added rating column to pois table")
+                except sqlite3.OperationalError as e:
+                    print(f"⚠️ Could not add rating column: {e}")
+            
             conn.commit()
-            print("✅ Database initialized successfully")
+            print("✅ Database initialized successfully with emergency contacts support")
     
     def create_route(self, route_id: str, user_id: str, filename: str, 
                     from_address: str = None, to_address: str = None,
@@ -563,4 +655,59 @@ class DatabaseManager:
                 return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
             print(f"Error getting stored images: {e}")
+            return []
+    def store_emergency_contacts(self, route_id: str, emergency_facilities: List[Dict]) -> bool:
+        """Store emergency facilities with detailed contact information"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                for facility in emergency_facilities:
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO emergency_contacts 
+                        (route_id, place_id, facility_type, name, phone_number, 
+                        formatted_phone, international_phone, address, latitude, longitude, 
+                        rating, opening_hours, website, distance_from_route)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        route_id,
+                        facility['place_id'],
+                        facility['facility_type'],
+                        facility['name'],
+                        facility.get('phone_number'),
+                        facility.get('formatted_phone_number'),
+                        facility.get('international_phone_number'),
+                        facility['address'],
+                        facility['latitude'],
+                        facility['longitude'],
+                        facility.get('rating', 0),
+                        json.dumps(facility.get('opening_hours', {})),
+                        facility.get('website'),
+                        facility.get('distance_from_route', 0)
+                    ))
+                
+                conn.commit()
+                return True
+                
+        except Exception as e:
+            print(f"Error storing emergency contacts: {e}")
+            return False
+
+    def get_emergency_contacts_by_type(self, route_id: str, facility_type: str) -> List[Dict]:
+        """Get emergency contacts by facility type with phone numbers"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT * FROM emergency_contacts 
+                    WHERE route_id = ? AND facility_type = ?
+                    ORDER BY distance_from_route, rating DESC
+                """, (route_id, facility_type))
+                
+                return [dict(row) for row in cursor.fetchall()]
+                
+        except Exception as e:
+            print(f"Error getting emergency contacts: {e}")
             return []

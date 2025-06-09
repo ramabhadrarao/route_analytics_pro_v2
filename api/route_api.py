@@ -53,7 +53,42 @@ class RouteAPI:
         except Exception as e:
             print(f"Error getting route data: {e}")
             return None
-    
+    def get_emergency_contacts(self, route_id: str) -> Dict[str, Any]:
+        """Get emergency contacts with phone numbers"""
+        try:
+            emergency_contacts = {
+                'hospitals': self.db_manager.get_emergency_contacts_by_type(route_id, 'hospital'),
+                'police_stations': self.db_manager.get_emergency_contacts_by_type(route_id, 'police_station'),
+                'fire_stations': self.db_manager.get_emergency_contacts_by_type(route_id, 'fire_station'),
+                'pharmacies': self.db_manager.get_emergency_contacts_by_type(route_id, 'pharmacy'),
+                'urgent_care': self.db_manager.get_emergency_contacts_by_type(route_id, 'urgent_care')
+            }
+            
+            # Statistics
+            total_facilities = sum(len(facilities) for facilities in emergency_contacts.values())
+            facilities_with_phone = sum(
+                len([f for f in facilities if f.get('formatted_phone_number')])
+                for facilities in emergency_contacts.values()
+            )
+            
+            return {
+                'emergency_contacts': emergency_contacts,
+                'statistics': {
+                    'total_facilities': total_facilities,
+                    'facilities_with_phone': facilities_with_phone,
+                    'phone_coverage_percentage': round((facilities_with_phone / total_facilities * 100), 1) if total_facilities > 0 else 0
+                },
+                'quick_contacts': {
+                    'national_emergency': '112',
+                    'police': '100', 
+                    'fire': '101',
+                    'ambulance': '108',
+                    'highway_patrol': '1033'
+                }
+            }
+            
+        except Exception as e:
+            return {'error': str(e)}
     def get_route_overview(self, route_id: str) -> Dict[str, Any]:
         """Get route overview data with enhanced safety scoring"""
         try:

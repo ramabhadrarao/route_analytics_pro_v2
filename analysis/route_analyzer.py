@@ -43,6 +43,14 @@ class RouteAnalyzer:
         # ADD THESE LINES:
         self.road_quality_analyzer = RoadQualityAnalyzer(api_tracker)
         self.environmental_analyzer = EnvironmentalRiskAnalyzer(api_tracker)
+        try:
+            from .emergency_analyzer import EmergencyFacilitiesAnalyzer
+            self.emergency_analyzer = EmergencyFacilitiesAnalyzer(api_tracker, self.db_manager)
+            EMERGENCY_AVAILABLE = True
+            print("✅ Emergency Facilities Analyzer imported successfully")
+        except ImportError as e:
+            print(f"⚠️ Emergency Facilities Analyzer not available: {e}")
+            EMERGENCY_AVAILABLE = False
         # Initialize API clients
         self.google_api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
         self.openweather_api_key = os.environ.get('OPENWEATHER_API_KEY')
@@ -136,7 +144,12 @@ class RouteAnalyzer:
             road_quality_data = self.road_quality_analyzer.analyze_road_conditions(route_points, route_id)
             if road_quality_data:
                 self.road_quality_analyzer.store_road_quality_data(route_id, road_quality_data)
-
+            # ADD AFTER STEP 12: Emergency Facilities Analysis
+            print("🚨 Analyzing emergency facilities with contact details...")
+            if hasattr(self, 'emergency_analyzer'):
+                emergency_data = self.emergency_analyzer.analyze_emergency_facilities(route_points, route_id)
+                if emergency_data:
+                    print(f"📞 Emergency analysis completed with contact information")
             # Step 12: Environmental Risk Analysis  
             print("🌍 Analyzing environmental risks...")
             environmental_data = self.environmental_analyzer.analyze_environmental_risks(route_points, route_id)
@@ -145,6 +158,7 @@ class RouteAnalyzer:
             print(f"✅ Route analysis completed successfully. Route ID: {route_id}")
             return route_id
             
+
         except Exception as e:
             print(f"❌ Route analysis failed: {e}")
             return None
