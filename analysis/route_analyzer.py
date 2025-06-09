@@ -3,7 +3,7 @@
 # Dependencies: googlemaps, requests, PIL, io
 # Author: Route Analysis System
 # Created: 2024
-
+import sys
 import csv
 import os
 import json
@@ -16,7 +16,8 @@ from typing import List, Dict, Tuple, Optional
 import googlemaps
 from PIL import Image
 import io
-
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from translation_before_db import TextTranslator
 class RouteAnalyzer:
     """Complete route analysis with API integration and data storage"""
     
@@ -27,7 +28,7 @@ class RouteAnalyzer:
         # Initialize API clients
         self.google_api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
         self.openweather_api_key = os.environ.get('OPENWEATHER_API_KEY')
-        
+        self.text_translator = TextTranslator(preferred_method='googletrans')
         if self.google_api_key:
             self.gmaps = googlemaps.Client(key=self.google_api_key)
         else:
@@ -162,7 +163,8 @@ class RouteAnalyzer:
                 origin=start_point,
                 destination=end_point,
                 mode="driving",
-                alternatives=False
+                alternatives=False,
+                language='en'
             )
             
             response_time = time.time() - start_time
@@ -480,10 +482,14 @@ class RouteAnalyzer:
             for point in sampled_points[:5]:  # Limit search points
                 try:
                     places = self._search_nearby_places(point[0], point[1], google_type)
-                    for place in places[:3]:  # Top 3 per location
+                    for place in places[:15]:  # Top 3 per location
                         name = place.get('name', 'Unknown')
                         vicinity = place.get('vicinity', 'Unknown location')
-                        pois_found[name] = vicinity
+                        # Translate to English before storing
+                        english_name = self.text_translator.translate_to_english(name)
+                        english_vicinity = self.text_translator.translate_to_english(vicinity)
+                        pois_found[english_name] = english_vicinity
+
                         
                 except Exception as e:
                     print(f"Error searching {poi_type}: {e}")
@@ -501,7 +507,8 @@ class RouteAnalyzer:
             places_result = self.gmaps.places_nearby(
                 location=(lat, lng),
                 radius=5000,
-                type=place_type
+                type=place_type,
+                language='en'
             )
             
             response_time = time.time() - start_time
