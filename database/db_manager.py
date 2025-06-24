@@ -258,6 +258,37 @@ class DatabaseManager:
                     FOREIGN KEY (route_id) REFERENCES routes (id)
                 )
             """)
+            # Highway information table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS route_highways (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    route_id TEXT NOT NULL,
+                    highway_name TEXT NOT NULL,
+                    highway_type TEXT NOT NULL,
+                    start_latitude REAL,
+                    start_longitude REAL,
+                    end_latitude REAL,
+                    end_longitude REAL,
+                    length_km REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (route_id) REFERENCES routes (id)
+                )
+            """)
+            
+            # Terrain classification table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS route_terrain (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    route_id TEXT NOT NULL,
+                    terrain_type TEXT NOT NULL,
+                    terrain_score REAL,
+                    elevation_variance REAL,
+                    urban_density_score REAL,
+                    classification_details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (route_id) REFERENCES routes (id)
+                )
+            """)
             
             # SAFE COLUMN ADDITIONS TO EXISTING POIS TABLE
             # Check existing columns first
@@ -828,3 +859,73 @@ class DatabaseManager:
             score += 5
         
         return min(100, score)
+    def get_route_highways(self, route_id: str) -> List[Dict]:
+        """Get highway information for route"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM route_highways WHERE route_id = ?", (route_id,))
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Error getting route highways: {e}")
+            return []
+
+    def get_route_terrain(self, route_id: str) -> Optional[Dict]:
+        """Get terrain classification for route"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM route_terrain WHERE route_id = ? LIMIT 1", (route_id,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            print(f"Error getting route terrain: {e}")
+            return None
+
+    def get_enhanced_route_overview_data(self, route_id: str) -> Dict[str, Any]:
+        """Get all data needed for enhanced route overview"""
+        try:
+            # Get basic route info
+            route = self.get_route(route_id)
+            if not route:
+                return {}
+            
+            # Get highways
+            highways = self.get_route_highways(route_id)
+            
+            # Get terrain
+            terrain = self.get_route_terrain(route_id)
+            
+            # Get route statistics
+            route_points = self.get_route_points(route_id)
+            sharp_turns = self.get_sharp_turns(route_id)
+            pois = {
+                'hospitals': self.get_pois_by_type(route_id, 'hospital'),
+                'gas_stations': self.get_pois_by_type(route_id, 'gas_station'),
+                'schools': self.get_pois_by_type(route_id, 'school'),
+                'restaurants': self.get_pois_by_type(route_id, 'restaurant'),
+                'police': self.get_pois_by_type(route_id, 'police'),
+                'fire_stations': self.get_pois_by_type(route_id, 'fire_station')
+            }
+            
+            return {
+                'route_info': route,
+                'highways': highways,
+                'terrain': terrain,
+                'route_points': route_points,
+                'sharp_turns': sharp_turns,
+                'pois': pois,
+                'statistics': {
+                    'total_points': len(route_points),
+                    'total_sharp_turns': len(sharp_turns),
+                    'critical_turns': len([t for t in sharp_turns if t.get('angle', 0) >= 70]),
+                    'total_pois': sum(len(poi_list) for poi_list in pois.values()),
+                    'total_highways': len(highways)
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error getting enhanced route overview data: {e}")
+            return {}

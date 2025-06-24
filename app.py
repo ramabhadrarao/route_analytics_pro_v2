@@ -50,7 +50,8 @@ class RouteAnalysisApp:
         self.api_tracker = APITracker(self.db_manager)
         self.route_analyzer = RouteAnalyzer(self.api_tracker)
         self.route_api = RouteAPI(self.db_manager, self.api_tracker)
-        self.pdf_generator = PDFGenerator(self.db_manager)
+        self.pdf_generator = PDFGenerator(self.db_manager, self.api_tracker)
+        # self.pdf_generator = PDFGenerator(self.db_manager)
         
         # Admin credentials
         self.ADMIN_USERNAME = 'admin'
@@ -256,6 +257,13 @@ class RouteAnalysisApp:
         def serve_image(filename):
             """Serve stored images"""
             return send_file(os.path.join('images', filename))
+        @self.app.route('/api/routes/<route_id>/enhanced-overview')
+        def route_enhanced_overview(route_id):
+            """Get enhanced route overview with highways and terrain"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            return jsonify(self.route_api.get_enhanced_route_overview(route_id))
     
     def run(self, debug=True, port=5000):
         """Run the Flask application"""

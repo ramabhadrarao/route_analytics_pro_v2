@@ -988,3 +988,120 @@ class RouteAPI:
             recommendations.append("Consider satellite communication device for dead zones")
         
         return recommendations
+    # ADD THESE NEW METHODS in the RouteAPI class:
+
+    def get_route_highways(self, route_id: str) -> Dict[str, Any]:
+        """Get highway information for route"""
+        try:
+            highways = self.db_manager.get_route_highways(route_id)
+            
+            if not highways:
+                return {'error': 'No highway data found for this route'}
+            
+            # Format highway names as comma-separated string
+            highway_names = [highway['highway_name'] for highway in highways]
+            highway_names_str = ', '.join(highway_names)
+            
+            # Categorize highways by type
+            highway_by_type = {}
+            total_length = 0
+            
+            for highway in highways:
+                highway_type = highway['highway_type']
+                if highway_type not in highway_by_type:
+                    highway_by_type[highway_type] = []
+                highway_by_type[highway_type].append(highway)
+                total_length += highway.get('length_km', 0)
+            
+            return {
+                'highways': highways,
+                'highway_names_string': highway_names_str,
+                'highway_by_type': highway_by_type,
+                'statistics': {
+                    'total_highways': len(highways),
+                    'total_highway_length': round(total_length, 2),
+                    'highway_types': list(highway_by_type.keys())
+                }
+            }
+            
+        except Exception as e:
+            return {'error': str(e)}
+
+    def get_route_terrain(self, route_id: str) -> Dict[str, Any]:
+        """Get terrain classification for route"""
+        try:
+            terrain = self.db_manager.get_route_terrain(route_id)
+            
+            if not terrain:
+                return {'error': 'No terrain data found for this route'}
+            
+            # Parse classification details
+            import json
+            classification_details = {}
+            try:
+                classification_details = json.loads(terrain.get('classification_details', '{}'))
+            except:
+                pass
+            
+            return {
+                'terrain_classification': terrain,
+                'terrain_type': terrain.get('terrain_type', 'Unknown'),
+                'confidence_score': terrain.get('terrain_score', 0),
+                'elevation_variance': terrain.get('elevation_variance', 0),
+                'urban_density_score': terrain.get('urban_density_score', 0),
+                'classification_details': classification_details,
+                'terrain_description': self._get_terrain_description(terrain.get('terrain_type', 'Unknown'))
+            }
+            
+        except Exception as e:
+            return {'error': str(e)}
+
+    def get_enhanced_route_overview(self, route_id: str) -> Dict[str, Any]:
+        """Get comprehensive route overview data for enhanced PDF"""
+        try:
+            # Get all enhanced overview data
+            overview_data = self.db_manager.get_enhanced_route_overview_data(route_id)
+            
+            if not overview_data:
+                return {'error': 'Route not found'}
+            
+            # Get highway and terrain data
+            highway_data = self.get_route_highways(route_id)
+            terrain_data = self.get_route_terrain(route_id)
+            
+            # Combine all data
+            enhanced_overview = {
+                'route_info': overview_data.get('route_info', {}),
+                'statistics': overview_data.get('statistics', {}),
+                'highways': highway_data,
+                'terrain': terrain_data,
+                'route_points': overview_data.get('route_points', []),
+                'sharp_turns': overview_data.get('sharp_turns', []),
+                'pois': overview_data.get('pois', {}),
+                'enhanced_features': {
+                    'has_highway_data': not highway_data.get('error'),
+                    'has_terrain_data': not terrain_data.get('error'),
+                    'highway_count': len(overview_data.get('highways', [])),
+                    'terrain_confidence': terrain_data.get('confidence_score', 0) if not terrain_data.get('error') else 0
+                }
+            }
+            
+            return enhanced_overview
+            
+        except Exception as e:
+            return {'error': str(e)}
+
+    def _get_terrain_description(self, terrain_type: str) -> str:
+        """Get descriptive text for terrain type"""
+        descriptions = {
+            'Urban Dense': 'High-density urban area with frequent traffic and numerous facilities',
+            'Urban Moderate': 'Moderate urban development with good infrastructure',
+            'Semi-Urban Plains': 'Mixed development area transitioning between urban and rural',
+            'Rural Plains': 'Flat rural area with minimal development',
+            'Rural Hilly': 'Hilly rural terrain with challenging elevation changes',
+            'Urban Hilly': 'Hilly urban area with steep gradients and urban infrastructure',
+            'Mountainous Semi-Urban': 'Mountainous terrain with some development',
+            'Rural Mountainous': 'Remote mountainous area with minimal infrastructure',
+            'Mixed Terrain': 'Varied terrain with multiple characteristics'
+        }
+        return descriptions.get(terrain_type, 'Terrain characteristics not fully analyzed')

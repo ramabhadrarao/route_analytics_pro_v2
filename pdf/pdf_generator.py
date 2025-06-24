@@ -10,7 +10,8 @@ import json
 import sqlite3
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-
+import requests
+from io import BytesIO
 try:
     from fpdf import FPDF
     import matplotlib.pyplot as plt
@@ -25,8 +26,18 @@ except ImportError as e:
 class PDFGenerator:
     """Complete comprehensive PDF generator with Unicode handling"""
     
-    def __init__(self, db_manager):
+    def __init__(self, db_manager,api_tracker=None):
         self.db_manager = db_manager
+        self.api_tracker = api_tracker
+    
+        # Initialize route_api for enhanced features
+        if api_tracker:
+            from api.route_api import RouteAPI
+            self.route_api = RouteAPI(db_manager, api_tracker)
+            print("📄 PDF Generator initialized with enhanced route overview support")
+        else:
+            self.route_api = None
+            print("📄 PDF Generator initialized in basic mode")
         
         # Image directories
         self.image_base_path = "images"
@@ -829,210 +840,2246 @@ class PDFGenerator:
             pdf.set_xy(x_start + (i * badge_width), 276)
             pdf.cell(badge_width - 2, 6, badge, 0, 0, 'C')
     def _add_overview_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add comprehensive route overview page with enhanced scoring display"""
-        from api.route_api import RouteAPI
-        route_api = RouteAPI(self.db_manager, None)
-        overview_data = route_api.get_route_overview(route_id)
-        
-        if 'error' in overview_data:
+        """Generate enhanced route overview page with highways, terrain, and detailed map"""
+        try:
             pdf.add_page()
-            pdf.add_section_header("ROUTE OVERVIEW & STATISTICS", "primary")
-            pdf.set_font('Helvetica', '', 12)
-            pdf.cell(0, 10, 'Route overview data not available.', 0, 1, 'L')
-            return
-        
-        pdf.add_page()
-        pdf.add_section_header("COMPREHENSIVE ROUTE OVERVIEW & STATISTICS", "primary")
-        
-        # Route information
-        route_info = overview_data['route_info']
-        stats = overview_data['statistics']
-        
-        # Basic route information
-        pdf.set_font('Helvetica', 'B', 14)
-        pdf.set_text_color(*self.primary_color)
-        pdf.cell(0, 10, '📋 ROUTE INFORMATION', 0, 1, 'L')
-        
-        route_table = [
-            ['From Address', route_info.get('from_address', 'Unknown')[:55]],
-            ['To Address', route_info.get('to_address', 'Unknown')[:55]],
-            ['Total Distance', route_info.get('distance', 'Unknown')],
-            ['Estimated Duration', route_info.get('duration', 'Unknown')],
-            ['Route Points Analyzed', f"{stats['total_points']:,}"],
-            ['Analysis Timestamp', route_info.get('created_at', '')[:19]]
-        ]
-        
-        pdf.create_detailed_table(route_table, [70, 110])
-        
-        # ENHANCED SAFETY SCORING SECTION
-        pdf.ln(15)
-        pdf.set_font('Helvetica', 'B', 16)
-        pdf.set_text_color(*self.danger_color)
-        pdf.cell(0, 10, 'ENHANCED SAFETY RISK ANALYSIS', 0, 1, 'L')
-        
-        # Risk Points Display (instead of 0/100)
-        risk_points = stats.get('risk_points', 0)
-        risk_category = stats.get('risk_category', 'UNKNOWN')
-        color_indicator = stats.get('color_indicator', 'GRAY')
-        
-        # Color mapping
-        color_map = {
-            'RED': self.danger_color,
-            'ORANGE': self.warning_color,
-            'YELLOW': (255, 193, 7),  # Yellow
-            'BLUE': self.info_color,
-            'GREEN': self.success_color
-        }
-        
-        display_color = color_map.get(color_indicator, self.secondary_color)
-        
-        # Risk Points Indicator Box
-        pdf.set_fill_color(*display_color)
-        pdf.rect(10, pdf.get_y(), 190, 20, 'F')
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font('Helvetica', 'B', 16)
-        pdf.set_xy(15, pdf.get_y() + 5)
-        risk_text = f'TOTAL RISK POINTS: {risk_points} | STATUS: {risk_category}'
-        pdf.cell(180, 10, risk_text, 0, 1, 'C')
-        
-        # DETAILED SCORING BREAKDOWN TABLE
-        pdf.ln(15)
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, '📊 DETAILED RISK SCORING BREAKDOWN', 0, 1, 'L')
-        
-        # Table headers
-        headers = ['Hazard Type', 'Count', 'Points Each', 'Total Points', 'Risk %', 'Status']
-        col_widths = [50, 20, 25, 25, 20, 25]
-        
-        pdf.create_table_header(headers, col_widths)
-        
-        # Add scoring breakdown rows
-        scoring_breakdown = stats.get('scoring_breakdown', [])
-        for item in scoring_breakdown:
-            risk_status = item['risk_level']
-            if risk_status == 'NONE':
-                risk_status = 'OK'
-            elif risk_status == 'CRITICAL':
-                risk_status = 'CRITICAL'
-            elif risk_status == 'HIGH':
-                risk_status = 'HIGH'
-            elif risk_status == 'MODERATE':
-                risk_status = 'MODERATE'
-            elif risk_status == 'LOW':
-                risk_status = 'LOW'
             
-            row_data = [
-                item['hazard_type'],
-                str(item['count']),
-                f"+{item['penalty_per_item']}",
-                str(item['total_penalty']),
-                f"{item['percentage_of_total_risk']}%",
-                risk_status
+            # Page title
+            self._add_page_header(pdf, "COMPREHENSIVE ROUTE OVERVIEW & STATISTICS", icon="📊")
+            
+            # Get enhanced overview data
+            enhanced_data = self.route_api.get_enhanced_route_overview(route_id)
+            
+            if enhanced_data.get('error'):
+                self._add_error_message(pdf, f"Failed to load enhanced route data: {enhanced_data.get('error')}")
+                return
+            
+            route_info = enhanced_data.get('route_info', {})
+            highway_data = enhanced_data.get('highways', {})
+            terrain_data = enhanced_data.get('terrain', {})
+            statistics = enhanced_data.get('statistics', {})
+            
+            # ROUTE INFORMATION TABLE (Enhanced)
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            pdf.cell(0, 8, 'ROUTE INFORMATION', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Table data with enhanced fields
+            table_data = [
+                ['From Address', route_info.get('from_address', 'Not specified')],
+                ['To Address', route_info.get('to_address', 'Not specified')],
+                ['Distance', route_info.get('distance', 'Not calculated')],
+                ['Duration', route_info.get('duration', 'Not calculated')]
+                # ['Total GPS Points', str(statistics.get('total_points', 0))],
+                # ['Analysis Date', route_info.get('created_at', '')[:10] if route_info.get('created_at') else 'Unknown']
             ]
-            pdf.create_table_row(row_data, col_widths)
+            
+            # ADD HIGHWAY DATA
+            if not highway_data.get('error'):
+                highway_names = highway_data.get('highway_names_string', 'No major highways detected')
+                table_data.append(['Major Highways', highway_names])
+            else:
+                table_data.append(['Major Highways', 'Highway detection not available'])
+            
+            # ADD TERRAIN DATA
+            if not terrain_data.get('error'):
+                terrain_type = terrain_data.get('terrain_type', 'Unknown')
+                table_data.append(['Terrain', terrain_type])
+            else:
+                table_data.append(['Terrain', 'Terrain analysis not available'])
+            
+            self._draw_enhanced_table(pdf, table_data)
+            
+            pdf.ln(8)
+            
+            # ROUTE STATISTICS
+            self._add_statistics_section(pdf, statistics, highway_data, terrain_data)
+            
+            # ADD ENHANCED ROUTE MAP
+            self._add_enhanced_route_map(pdf, enhanced_data)
+            
+        except Exception as e:
+            print(f"Error generating enhanced route overview: {e}")
+            self._add_error_message(pdf, "Failed to generate enhanced route overview")
+    def _add_safety_compliance_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict) -> None:
+        """Add Key Safety Measures & Regulatory Compliance table with dynamic content and intelligent rest breaks calculation"""
+        try:
+            pdf.ln(10)
+            
+            # Safety compliance header
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            pdf.cell(0, 8, 'KEY SAFETY MEASURES & REGULATORY COMPLIANCE', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Extract route-specific data
+            highway_data = enhanced_data.get('highways', {})
+            terrain_data = enhanced_data.get('terrain', {})
+            route_info = enhanced_data.get('route_info', {})
+            
+            highways = highway_data.get('highways', []) if not highway_data.get('error') else []
+            terrain_type = terrain_data.get('terrain_type', 'Mixed') if not terrain_data.get('error') else 'Mixed'
+            duration = route_info.get('duration', '')
+            distance = route_info.get('distance', '')
+            
+            # 1. DYNAMIC SPEED LIMITS based on detected highways and terrain
+            speed_parts = []
+            highway_types = set()
+            
+            # Analyze detected highways
+            for highway in highways:
+                highway_name = highway.get('highway_name', '')
+                if highway_name.startswith('NH-'):
+                    highway_types.add('NH')
+                elif highway_name.startswith('SH-'):
+                    highway_types.add('SH')
+                elif highway_name.startswith('MDR-'):
+                    highway_types.add('MDR')
+            
+            # Add highway-specific speed limits
+            if 'NH' in highway_types:
+                speed_parts.append("NH: 60 km/h")
+            if 'SH' in highway_types:
+                speed_parts.append("SH: 55 km/h")
+            if 'MDR' in highway_types:
+                speed_parts.append("MDR: 55 km/h")
+            
+            # Add terrain-based speed limits
+            if 'Urban' in terrain_type:
+                speed_parts.append("Urban: 40 km/h")
+            if 'Rural' in terrain_type or 'Plains' in terrain_type:
+                speed_parts.append("Rural: 25–30 km/h")
+            if 'Hilly' in terrain_type or 'Mountainous' in terrain_type:
+                speed_parts.append("Hilly/Mountain: 20–25 km/h")
+            
+            speed_limits = "; ".join(speed_parts) if speed_parts else "Standard: 25–40 km/h"
+            
+            # 2. DYNAMIC NIGHT DRIVING based on terrain and highways
+            if 'Mountainous' in terrain_type or 'Hilly' in terrain_type:
+                night_driving = "Prohibited: 22:00–06:00 hrs (Hilly/Mountain terrain)"
+            elif len(highways) == 0:  # Rural roads only
+                night_driving = "Prohibited: 23:00–06:00 hrs (Rural roads)"
+            else:
+                night_driving = "Prohibited: 00:00–06:00 hrs"
+            
+            # 3. INTELLIGENT REST BREAKS CALCULATION
+            rest_breaks = self._calculate_intelligent_rest_breaks(duration, distance, terrain_type, highways)
+            
+            # 4. DYNAMIC VEHICLE COMPLIANCE based on route characteristics
+            requirements = ["Check brakes, tires, lights"]
+            
+            if 'Hilly' in terrain_type or 'Mountainous' in terrain_type:
+                requirements.append("engine cooling system")
+            
+            if any('NH' in h.get('highway_name', '') for h in highways):
+                requirements.append("high-speed capability")
+            
+            requirements.append("emergency equipment")
+            vehicle_compliance = ", ".join(requirements)
+            
+            # 5. DYNAMIC PERMITS based on highways detected
+            permits_base = "Carry valid transport permits, Hazardous vehicle license"
+            if highways:
+                permits_documents = f"{permits_base}, Highway permits for {', '.join([h.get('highway_name', '')[:6] for h in highways[:2]])}, MSDS sheets"
+            else:
+                permits_documents = f"{permits_base} and MSDS sheets"
+            
+            # 6. VTS REQUIREMENTS (enhanced based on route type)
+            if any('NH' in h.get('highway_name', '') for h in highways):
+                vts_requirement = "VTS device shall be functional (Mandatory for NH routes)"
+            else:
+                vts_requirement = "VTS device shall be functional"
+            
+            # Build safety compliance table data with dynamic content
+            safety_table_data = [
+                ['Speed Limits', speed_limits],
+                ['Night Driving', night_driving],
+                ['Rest Breaks', rest_breaks],
+                ['Vehicle Compliance', vehicle_compliance],
+                ['Permits & Documents', permits_documents],
+                ['VTS', vts_requirement]
+            ]
+            
+            # Draw the safety compliance table with same styling as route information table
+            self._draw_enhanced_table(pdf, safety_table_data)
+            
+            # Add route-specific compliance note
+            pdf.ln(5)
+            pdf.set_font('Helvetica', 'I', 9)
+            pdf.set_text_color(120, 120, 120)
+            
+            # Generate dynamic compliance note
+            notes = ["Ensure all regulatory requirements are met before journey commencement."]
+            
+            if highways:
+                highway_names = [h.get('highway_name', '') for h in highways[:3]]
+                notes.append(f"Route includes major highways: {', '.join(highway_names)}.")
+            
+            if 'Hilly' in terrain_type or 'Mountainous' in terrain_type:
+                notes.append("Extra caution required for hilly/mountainous terrain.")
+            elif 'Rural' in terrain_type:
+                notes.append("Rural terrain requires attention to livestock and agricultural vehicles.")
+            
+            notes.append("Speed limits may vary based on local regulations and road conditions.")
+            
+            compliance_note = " ".join(notes)
+            wrapped_note = self._wrap_text(compliance_note, 180)
+            for line in wrapped_note:
+                pdf.cell(0, 4, line, 0, 1, 'L')
+            
+            print(f"✅ Added dynamic safety compliance table for {terrain_type} terrain with {len(highways)} highways")
+            
+        except Exception as e:
+            print(f"❌ Error adding safety compliance table: {e}")
+            # Fallback to basic table
+            safety_table_data = [
+                ['Speed Limits', 'NH: 60 km/h; SH: 55 km/h; MDR: 55 km/h; Rural: 25–30 km/h'],
+                ['Night Driving', 'Prohibited: 00:00–06:00 hrs'],
+                ['Rest Breaks', 'Mandatory 15-30 min every 3 hours'],
+                ['Vehicle Compliance', 'Check brakes, tires, lights, emergency equipment'],
+                ['Permits & Documents', 'Carry valid transport permits, Hazardous vehicle license and MSDS sheets'],
+                ['VTS', 'VTS device shall be functional']
+            ]
+            self._draw_enhanced_table(pdf, safety_table_data)
+
+    def _calculate_intelligent_rest_breaks(self, duration: str, distance: str, terrain_type: str, highways: List[Dict]) -> str:
+        """Calculate intelligent rest breaks based on multiple factors"""
+        try:
+            # Extract duration in hours
+            duration_hours = self._parse_duration_to_hours(duration)
+            
+            # Extract distance in kilometers
+            distance_km = self._parse_distance_to_km(distance)
+            
+            # Base rest break calculation
+            if duration_hours <= 0:
+                return "Mandatory 15-30 min every 3 hours"
+            
+            # Calculate rest breaks based on multiple factors
+            rest_recommendations = []
+            
+            # 1. DURATION-BASED CALCULATION
+            if duration_hours <= 2:
+                base_rest = "Recommended 10-15 min break after 2 hours"
+            elif duration_hours <= 4:
+                base_rest = "Mandatory 15 min every 2 hours"
+            elif duration_hours <= 6:
+                base_rest = "Mandatory 20-30 min every 2.5 hours"
+            elif duration_hours <= 8:
+                base_rest = "Mandatory 30 min every 2 hours"
+            elif duration_hours <= 10:
+                base_rest = "Mandatory 45 min every 2 hours + 1 hour meal break"
+            else:
+                base_rest = "Mandatory 45-60 min every 2 hours + Extended rest required"
+            
+            rest_recommendations.append(base_rest)
+            
+            # 2. TERRAIN-BASED ADJUSTMENTS
+            if 'Mountainous' in terrain_type or 'Hilly' in terrain_type:
+                rest_recommendations.append("Extra 10 min for hilly terrain fatigue")
+            elif 'Urban Dense' in terrain_type:
+                rest_recommendations.append("Extra 5 min for urban stress")
+            
+            # 3. HIGHWAY-BASED ADJUSTMENTS
+            has_nh = any('NH' in h.get('highway_name', '') for h in highways)
+            if has_nh and duration_hours > 4:
+                rest_recommendations.append("Highway driving: Extended breaks recommended")
+            
+            # 4. DISTANCE-BASED ADJUSTMENTS
+            if distance_km > 500:
+                rest_recommendations.append("Long distance: Additional meal breaks required")
+            elif distance_km > 300:
+                rest_recommendations.append("Medium distance: Regular hydration breaks")
+            
+            # 5. REGULATORY COMPLIANCE
+            if duration_hours > 8:
+                rest_recommendations.append("Legal: Max 8 hours driving per day")
+            
+            # 6. CALCULATE SPECIFIC BREAK SCHEDULE
+            if duration_hours > 2:
+                break_interval = max(2, min(3, duration_hours / 3))  # Between 2-3 hours
+                break_duration = min(45, max(15, duration_hours * 5))  # 15-45 minutes
+                total_breaks = int(duration_hours / break_interval)
+                
+                schedule = f"Schedule: {total_breaks} breaks of {break_duration:.0f} min every {break_interval:.1f} hours"
+                rest_recommendations.append(schedule)
+            
+            # Combine recommendations
+            if len(rest_recommendations) > 2:
+                # Primary recommendation + additional notes
+                primary = rest_recommendations[0]
+                additional = "; ".join(rest_recommendations[1:3])  # Limit to avoid long text
+                return f"{primary}; {additional}"
+            else:
+                return "; ".join(rest_recommendations)
+            
+        except Exception as e:
+            print(f"Error calculating rest breaks: {e}")
+            return "Mandatory 15-30 min every 3 hours"
+
+    def _parse_duration_to_hours(self, duration_str: str) -> float:
+        """Parse duration string to hours"""
+        try:
+            import re
+            duration_str = duration_str.lower()
+            
+            hours = 0
+            minutes = 0
+            
+            # Extract hours
+            hour_patterns = [r'(\d+)\s*h', r'(\d+)\s*hour', r'(\d+)\s*hr']
+            for pattern in hour_patterns:
+                hour_match = re.search(pattern, duration_str)
+                if hour_match:
+                    hours = int(hour_match.group(1))
+                    break
+            
+            # Extract minutes
+            min_patterns = [r'(\d+)\s*m', r'(\d+)\s*min', r'(\d+)\s*minute']
+            for pattern in min_patterns:
+                min_match = re.search(pattern, duration_str)
+                if min_match:
+                    minutes = int(min_match.group(1))
+                    break
+            
+            # If only a single number, assume hours
+            if hours == 0 and minutes == 0:
+                number_match = re.search(r'(\d+)', duration_str)
+                if number_match:
+                    hours = int(number_match.group(1))
+            
+            total_hours = hours + (minutes / 60)
+            return total_hours
+            
+        except Exception as e:
+            print(f"Error parsing duration: {e}")
+            return 0
+
+    def _parse_distance_to_km(self, distance_str: str) -> float:
+        """Parse distance string to kilometers"""
+        try:
+            import re
+            distance_str = distance_str.lower()
+            
+            # Look for kilometers
+            km_match = re.search(r'([\d,\.]+)\s*k', distance_str)
+            if km_match:
+                km_str = km_match.group(1).replace(',', '')
+                return float(km_str)
+            
+            # Look for miles and convert
+            mile_match = re.search(r'([\d,\.]+)\s*m', distance_str)
+            if mile_match:
+                miles_str = mile_match.group(1).replace(',', '')
+                return float(miles_str) * 1.60934  # Convert to km
+            
+            # Default number extraction
+            number_match = re.search(r'([\d,\.]+)', distance_str)
+            if number_match:
+                return float(number_match.group(1).replace(',', ''))
+            
+            return 0
+            
+        except Exception as e:
+            print(f"Error parsing distance: {e}")
+            return 0
+    def _add_high_risk_zones_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict, route_id: str) -> None:
+        """Add High-Risk Zones & Key Risk Points table with actual route data"""
+        try:
+            pdf.ln(10)
+            
+            # High-Risk Zones header
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            pdf.cell(0, 8, 'HIGH-RISK ZONES & KEY RISK POINTS', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Get route data for risk analysis
+            route_info = enhanced_data.get('route_info', {})
+            sharp_turns = enhanced_data.get('sharp_turns', [])
+            route_points = enhanced_data.get('route_points', [])
+            
+            # Get additional risk data from database
+            risk_zones = self._compile_high_risk_zones(route_id, sharp_turns, route_points, route_info)
+            
+            if not risk_zones:
+                pdf.set_font('Helvetica', 'I', 10)
+                pdf.set_text_color(120, 120, 120)
+                pdf.cell(0, 6, 'No high-risk zones identified for this route.', 0, 1, 'L')
+                return
+            
+            # Table headers
+            pdf.set_font('Helvetica', 'B', 9)
+            pdf.set_text_color(255, 255, 255)  # White text
+            pdf.set_fill_color(0, 82, 163)  # HPCL blue background
+            
+            # Define column widths for risk zones table
+            col_widths = [35, 20, 20, 25, 25, 25, 30]  # Adjusted for content
+            headers = ['Type', 'from Start', 'from End', 'Coordinates', 'Risk Level', 'Speed Limit', 'Driver Action']
+            
+            # Draw table header
+            x_start = pdf.get_x()
+            y_start = pdf.get_y()
+            
+            for i, header in enumerate(headers):
+                pdf.rect(x_start + sum(col_widths[:i]), y_start, col_widths[i], 8, 'F')
+                pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2)
+                
+                # Wrap header text if too long
+                if len(header) > 8:
+                    lines = self._wrap_text(header, col_widths[i] - 2)
+                    for j, line in enumerate(lines[:2]):  # Max 2 lines
+                        pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 1 + (j * 3))
+                        pdf.cell(col_widths[i] - 2, 3, line, 0, 0, 'C')
+                else:
+                    pdf.cell(col_widths[i] - 2, 4, header, 0, 0, 'C')
+            
+            pdf.set_xy(x_start, y_start + 8)
+            
+            # Draw table rows
+            row_height = 10
+            for i, zone in enumerate(risk_zones[:15]):  # Limit to 15 most critical zones
+                y_pos = pdf.get_y()
+                
+                # Alternate row colors
+                if i % 2 == 0:
+                    pdf.set_fill_color(248, 249, 250)  # Light gray
+                else:
+                    pdf.set_fill_color(255, 255, 255)  # White
+                
+                # Draw row background
+                pdf.rect(x_start, y_pos, sum(col_widths), row_height, 'F')
+                
+                # Set text color based on risk level
+                risk_level = zone.get('risk_level', 'Medium')
+                if risk_level == 'High' or risk_level == 'Critical':
+                    pdf.set_text_color(220, 53, 69)  # Red
+                elif risk_level == 'Medium':
+                    pdf.set_text_color(255, 193, 7)  # Orange
+                else:
+                    pdf.set_text_color(40, 167, 69)  # Green
+                
+                # Prepare row data
+                row_data = [
+                    zone.get('type', 'Unknown'),
+                    f"{zone.get('dist_from_start', 0):.1f} km",
+                    f"{zone.get('dist_from_end', 0):.1f} km",
+                    zone.get('coordinates', 'N/A'),
+                    zone.get('risk_level', 'Medium'),
+                    zone.get('speed_limit', 'Normal'),
+                    zone.get('driver_action', 'Exercise caution')
+                ]
+                
+                # Draw cells
+                for j, (data, width) in enumerate(zip(row_data, col_widths)):
+                    x_pos = x_start + sum(col_widths[:j])
+                    pdf.set_xy(x_pos + 1, y_pos + 2)
+                    
+                    pdf.set_font('Helvetica', '', 8)
+                    
+                    # Handle long text
+                    if len(str(data)) > 15:
+                        lines = self._wrap_text(str(data), width - 2)
+                        for k, line in enumerate(lines[:2]):  # Max 2 lines
+                            pdf.set_xy(x_pos + 1, y_pos + 1 + (k * 4))
+                            pdf.cell(width - 2, 4, line, 0, 0, 'L')
+                    else:
+                        pdf.cell(width - 2, 6, str(data), 0, 0, 'L')
+                
+                pdf.set_xy(x_start, y_pos + row_height)
+            
+            # Add risk zones summary
+            pdf.ln(5)
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.set_text_color(0, 82, 163)
+            pdf.cell(0, 6, f'RISK SUMMARY: {len(risk_zones)} high-risk zones identified', 0, 1, 'L')
+            
+            # Risk level counts
+            risk_counts = {}
+            for zone in risk_zones:
+                level = zone.get('risk_level', 'Medium')
+                risk_counts[level] = risk_counts.get(level, 0) + 1
+            
+            pdf.set_font('Helvetica', '', 9)
+            pdf.set_text_color(100, 100, 100)
+            summary_parts = []
+            for level, count in risk_counts.items():
+                summary_parts.append(f"{level}: {count}")
+            
+            pdf.cell(0, 4, " | ".join(summary_parts), 0, 1, 'L')
+            
+            print(f"✅ Added high-risk zones table with {len(risk_zones)} zones")
+            
+        except Exception as e:
+            print(f"❌ Error adding high-risk zones table: {e}")
+
+    def _compile_high_risk_zones(self, route_id: str, sharp_turns: List[Dict], 
+                                route_points: List[Dict], route_info: Dict) -> List[Dict]:
+        """Compile high-risk zones from various data sources"""
+        try:
+            risk_zones = []
+            
+            # 1. SHARP TURNS (High Priority)
+            critical_turns = [turn for turn in sharp_turns if turn.get('angle', 0) >= 70]
+            for i, turn in enumerate(critical_turns[:8]):  # Top 8 critical turns
+                
+                dist_from_start, dist_from_end = self._calculate_distances_from_endpoints(
+                    turn['latitude'], turn['longitude'], route_points
+                )
+                
+                # Determine speed limit based on angle
+                angle = turn.get('angle', 0)
+                if angle >= 90:
+                    speed_limit = "10 km/h"
+                    driver_action = "Stop, check visibility, proceed slowly"
+                    risk_level = "Critical"
+                elif angle >= 80:
+                    speed_limit = "15 km/h"
+                    driver_action = "Reduce speed, check mirrors"
+                    risk_level = "High"
+                else:
+                    speed_limit = "20 km/h"
+                    driver_action = "Slow down, cautious turning"
+                    risk_level = "High"
+                
+                risk_zones.append({
+                    'type': f"Sharp Turn #{i+1}",
+                    'coordinates': f"{turn['latitude']:.5f}, {turn['longitude']:.5f}",
+                    'risk_level': risk_level,
+                    'speed_limit': speed_limit,
+                    'driver_action': driver_action,
+                    'dist_from_start': dist_from_start,
+                    'dist_from_end': dist_from_end,
+                    'priority': 1  # Highest priority
+                })
+            
+            # 2. BLIND SPOTS (Medium-High Priority)
+            moderate_turns = [turn for turn in sharp_turns if 60 <= turn.get('angle', 0) < 70]
+            for i, turn in enumerate(moderate_turns[:4]):  # Top 4 blind spots
+                
+                dist_from_start, dist_from_end = self._calculate_distances_from_endpoints(
+                    turn['latitude'], turn['longitude'], route_points
+                )
+                
+                risk_zones.append({
+                    'type': f"Blind Spot #{i+1}",
+                    'coordinates': f"{turn['latitude']:.5f}, {turn['longitude']:.5f}",
+                    'risk_level': "Medium",
+                    'speed_limit': "30 km/h",
+                    'driver_action': "Use horn, stay alert",
+                    'dist_from_start': dist_from_start,
+                    'dist_from_end': dist_from_end,
+                    'priority': 2
+                })
+            
+            # 3. ELEVATION CHANGES (From Database)
+            elevation_risks = self._get_elevation_risk_zones(route_id, route_points)
+            risk_zones.extend(elevation_risks)
+            
+            # 4. TRAFFIC CONGESTION ZONES (From Database)
+            traffic_risks = self._get_traffic_risk_zones(route_id, route_points)
+            risk_zones.extend(traffic_risks)
+            
+            # 5. COMMUNICATION DEAD ZONES (From Database)
+            communication_risks = self._get_communication_risk_zones(route_id, route_points)
+            risk_zones.extend(communication_risks)
+            
+            # 6. ENVIRONMENTAL RISK ZONES (From Database)
+            environmental_risks = self._get_environmental_risk_zones(route_id, route_points)
+            risk_zones.extend(environmental_risks)
+            
+            # Sort by priority and risk level
+            risk_zones.sort(key=lambda x: (x.get('priority', 3), 
+                                        {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3}.get(x.get('risk_level', 'Medium'), 2)))
+            
+            return risk_zones
+            
+        except Exception as e:
+            print(f"Error compiling risk zones: {e}")
+            return []
+
+    def _calculate_distances_from_endpoints(self, lat: float, lng: float, route_points: List[Dict]) -> tuple:
+        """Calculate distances from start and end points"""
+        try:
+            if not route_points:
+                return 0, 0
+            
+            start_point = route_points[0]
+            end_point = route_points[-1]
+            
+            # Calculate distance from start
+            dist_from_start = self._calculate_distance_km(
+                [lat, lng], [start_point['latitude'], start_point['longitude']]
+            )
+            
+            # Calculate distance from end
+            dist_from_end = self._calculate_distance_km(
+                [lat, lng], [end_point['latitude'], end_point['longitude']]
+            )
+            
+            return dist_from_start, dist_from_end
+            
+        except Exception as e:
+            return 0, 0
+
+    def _calculate_distance_km(self, point1: List[float], point2: List[float]) -> float:
+        """Calculate distance between two points in kilometers"""
+        import math
         
-        # Add total row
-        total_penalty = stats.get('total_penalty_points', 0)
-        pdf.set_font('Helvetica', 'B', 10)
-        pdf.set_fill_color(240, 240, 240)
-        total_row = ['TOTAL RISK POINTS', '', '', str(total_penalty), '100%', risk_category[:8]]
+        lat1, lon1 = point1[0], point1[1]
+        lat2, lon2 = point2[0], point2[1]
         
-        y_pos = pdf.get_y()
-        for i, (cell, width) in enumerate(zip(total_row, col_widths)):
-            pdf.set_xy(10 + sum(col_widths[:i]), y_pos)
-            pdf.cell(width, 8, cell, 1, 0, 'C', True)
-        pdf.ln(8)
+        R = 6371  # Earth's radius in kilometers
         
-        # RISK INTERPRETATION GUIDE
-        pdf.add_page()
-        pdf.set_font('Helvetica', 'B', 10)
-        pdf.set_text_color(*self.info_color)
-        pdf.cell(0, 8, 'RISK POINTS INTERPRETATION GUIDE', 0, 1, 'L')
+        lat1_rad = math.radians(lat1)
+        lat2_rad = math.radians(lat2)
+        delta_lat = math.radians(lat2 - lat1)
+        delta_lon = math.radians(lon2 - lon1)
         
-        interpretation_table = [
-            ['Risk Points Range', 'Safety Level', 'Action Required', 'Route Recommendation'],
-            ['0-19 Points', 'SAFE ROUTE', 'Standard precautions', 'Approved for all vehicle types'],
-            ['20-49 Points', 'LOW RISK', 'Basic safety measures', 'Suitable with normal care'],
-            ['50-99 Points', 'MODERATE RISK', 'Enhanced precautions', 'Extra caution required'],
-            ['100-149 Points', 'HIGH RISK', 'Significant safety measures', 'Consider alternative route'],
-            ['150+ Points', 'CRITICAL RISK', 'Extreme caution/reroute', 'Route not recommended']
-        ]
+        a = (math.sin(delta_lat/2) * math.sin(delta_lat/2) +
+            math.cos(lat1_rad) * math.cos(lat2_rad) *
+            math.sin(delta_lon/2) * math.sin(delta_lon/2))
         
-        interp_headers = ['Risk Points Range', 'Safety Level', 'Action Required', 'Route Recommendation']
-        interp_col_widths = [35, 30, 40, 80]
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
         
-        pdf.create_table_header(interp_headers, interp_col_widths)
-        for row in interpretation_table[1:]:  # Skip header row
-            pdf.create_table_row(row, interp_col_widths)
+        return R * c
+
+    def _get_elevation_risk_zones(self, route_id: str, route_points: List[Dict]) -> List[Dict]:
+        """Get elevation-based risk zones from database"""
+        try:
+            import sqlite3
+            
+            elevation_risks = []
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Find significant elevation changes
+                cursor.execute("""
+                    SELECT latitude, longitude, elevation 
+                    FROM elevation_data 
+                    WHERE route_id = ? 
+                    ORDER BY id
+                """, (route_id,))
+                
+                elevation_data = [dict(row) for row in cursor.fetchall()]
+                
+                # Analyze elevation changes
+                for i in range(1, len(elevation_data)):
+                    prev_elev = elevation_data[i-1]['elevation']
+                    curr_elev = elevation_data[i]['elevation']
+                    elevation_change = abs(curr_elev - prev_elev)
+                    
+                    if elevation_change > 100:  # Significant elevation change
+                        dist_from_start, dist_from_end = self._calculate_distances_from_endpoints(
+                            elevation_data[i]['latitude'], elevation_data[i]['longitude'], route_points
+                        )
+                        
+                        elevation_risks.append({
+                            'type': f"Elevation Change #{len(elevation_risks)+1}",
+                            'coordinates': f"{elevation_data[i]['latitude']:.5f}, {elevation_data[i]['longitude']:.5f}",
+                            'risk_level': "High" if elevation_change > 200 else "Medium",
+                            'speed_limit': "15 km/h" if elevation_change > 200 else "25 km/h",
+                            'driver_action': "Use lower gear, maintain control",
+                            'dist_from_start': dist_from_start,
+                            'dist_from_end': dist_from_end,
+                            'priority': 2
+                        })
+            
+            return elevation_risks[:3]  # Limit to top 3
+            
+        except Exception as e:
+            return []
+
+    def _get_traffic_risk_zones(self, route_id: str, route_points: List[Dict]) -> List[Dict]:
+        """Get traffic congestion risk zones from database"""
+        try:
+            import sqlite3
+            
+            traffic_risks = []
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT latitude, longitude, congestion_level, current_speed 
+                    FROM traffic_data 
+                    WHERE route_id = ? AND congestion_level IN ('HEAVY', 'MODERATE')
+                    ORDER BY 
+                        CASE congestion_level 
+                            WHEN 'HEAVY' THEN 1 
+                            WHEN 'MODERATE' THEN 2 
+                            ELSE 3 
+                        END
+                """, (route_id,))
+                
+                traffic_data = [dict(row) for row in cursor.fetchall()]
+                
+                for i, traffic in enumerate(traffic_data[:3]):  # Top 3 congested areas
+                    dist_from_start, dist_from_end = self._calculate_distances_from_endpoints(
+                        traffic['latitude'], traffic['longitude'], route_points
+                    )
+                    
+                    congestion = traffic['congestion_level']
+                    speed = traffic.get('current_speed', 0)
+                    
+                    traffic_risks.append({
+                        'type': f"High Congestion Area #{i+1}",
+                        'coordinates': f"{traffic['latitude']:.5f}, {traffic['longitude']:.5f}",
+                        'risk_level': "High" if congestion == 'HEAVY' else "Medium",
+                        'speed_limit': f"{max(10, speed)} km/h" if speed > 0 else "25 km/h",
+                        'driver_action': "Avoid peak hours, plan stops",
+                        'dist_from_start': dist_from_start,
+                        'dist_from_end': dist_from_end,
+                        'priority': 2
+                    })
+            
+            return traffic_risks
+            
+        except Exception as e:
+            return []
+
+    def _get_communication_risk_zones(self, route_id: str, route_points: List[Dict]) -> List[Dict]:
+        """Get communication dead zones from database"""
+        try:
+            import sqlite3
+            
+            comm_risks = []
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT latitude, longitude, coverage_quality 
+                    FROM network_coverage 
+                    WHERE route_id = ? AND (is_dead_zone = 1 OR coverage_quality = 'dead')
+                """, (route_id,))
+                
+                dead_zones = [dict(row) for row in cursor.fetchall()]
+                
+                for i, zone in enumerate(dead_zones[:2]):  # Top 2 dead zones
+                    dist_from_start, dist_from_end = self._calculate_distances_from_endpoints(
+                        zone['latitude'], zone['longitude'], route_points
+                    )
+                    
+                    comm_risks.append({
+                        'type': f"Communication Dead Zone #{i+1}",
+                        'coordinates': f"{zone['latitude']:.5f}, {zone['longitude']:.5f}",
+                        'risk_level': "High",
+                        'speed_limit': "—",
+                        'driver_action': "Use alternative comms device",
+                        'dist_from_start': dist_from_start,
+                        'dist_from_end': dist_from_end,
+                        'priority': 3
+                    })
+            
+            return comm_risks
+            
+        except Exception as e:
+            return []
+
+    def _get_environmental_risk_zones(self, route_id: str, route_points: List[Dict]) -> List[Dict]:
+        """Get environmental risk zones from database"""
+        try:
+            import sqlite3
+            
+            env_risks = []
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT latitude, longitude, risk_type, severity 
+                    FROM environmental_risks 
+                    WHERE route_id = ? AND severity IN ('critical', 'high')
+                    ORDER BY 
+                        CASE severity 
+                            WHEN 'critical' THEN 1 
+                            WHEN 'high' THEN 2 
+                            ELSE 3 
+                        END
+                    LIMIT 2
+                """, (route_id,))
+                
+                env_data = [dict(row) for row in cursor.fetchall()]
+                
+                for i, env in enumerate(env_data):
+                    dist_from_start, dist_from_end = self._calculate_distances_from_endpoints(
+                        env['latitude'], env['longitude'], route_points
+                    )
+                    
+                    risk_type = env.get('risk_type', 'environmental')
+                    severity = env.get('severity', 'medium')
+                    
+                    env_risks.append({
+                        'type': f"{risk_type.replace('_', ' ').title()} Zone",
+                        'coordinates': f"{env['latitude']:.5f}, {env['longitude']:.5f}",
+                        'risk_level': severity.title(),
+                        'speed_limit': "Normal",
+                        'driver_action': "Follow environmental guidelines",
+                        'dist_from_start': dist_from_start,
+                        'dist_from_end': dist_from_end,
+                        'priority': 3
+                    })
+            
+            return env_risks
+            
+        except Exception as e:
+            return []
+    def _draw_enhanced_table(self, pdf: 'EnhancedRoutePDF', table_data: List[List[str]]) -> None:
+        """Draw enhanced table with better formatting"""
+        try:
+            # Table settings
+            col_widths = [60, 120]  # Column widths
+            row_height = 8
+            
+            # Table border
+            table_width = sum(col_widths)
+            table_start_x = pdf.get_x()
+            table_start_y = pdf.get_y()
+            
+            # Draw table border
+            pdf.set_draw_color(0, 82, 163)  # HPCL blue
+            pdf.set_line_width(0.5)
+            pdf.rect(table_start_x, table_start_y, table_width, len(table_data) * row_height)
+            
+            # Draw rows
+            for i, row in enumerate(table_data):
+                y_pos = table_start_y + (i * row_height)
+                
+                # Alternate row colors
+                if i % 2 == 0:
+                    pdf.set_fill_color(248, 249, 250)  # Light gray
+                else:
+                    pdf.set_fill_color(255, 255, 255)  # White
+                
+                # Draw row background
+                pdf.rect(table_start_x, y_pos, table_width, row_height, 'F')
+                
+                # Draw cell contents
+                x_pos = table_start_x
+                for j, cell_content in enumerate(row):
+                    # Set font style
+                    if j == 0:  # First column (labels)
+                        pdf.set_font('Helvetica', 'B', 10)
+                        pdf.set_text_color(0, 82, 163)  # HPCL blue
+                    else:  # Second column (values)
+                        pdf.set_font('Helvetica', '', 10)
+                        pdf.set_text_color(0, 0, 0)  # Black
+                    
+                    # Position and add text
+                    pdf.set_xy(x_pos + 2, y_pos + 2)
+                    
+                    # Handle long text
+                    if len(cell_content) > 30:
+                        # Wrap long text
+                        lines = self._wrap_text(cell_content, col_widths[j] - 4)
+                        for line_num, line in enumerate(lines[:2]):  # Max 2 lines
+                            pdf.set_xy(x_pos + 2, y_pos + 2 + (line_num * 3))
+                            pdf.cell(col_widths[j] - 4, 3, line, 0, 0, 'L')
+                    else:
+                        pdf.cell(col_widths[j] - 4, 4, cell_content, 0, 0, 'L')
+                    
+                    x_pos += col_widths[j]
+                    
+                    # Draw column separator
+                    if j < len(row) - 1:
+                        pdf.set_draw_color(200, 200, 200)
+                        pdf.line(x_pos, y_pos, x_pos, y_pos + row_height)
+            
+            # Move cursor below table
+            pdf.set_xy(table_start_x, table_start_y + (len(table_data) * row_height))
+            
+        except Exception as e:
+            print(f"Error drawing enhanced table: {e}")
+
+    def _add_statistics_section(self, pdf: 'EnhancedRoutePDF', statistics: Dict, highway_data: Dict, terrain_data: Dict) -> None:
+        """Add comprehensive statistics section"""
+        try:
+            # Statistics header
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            pdf.cell(0, 8, 'ROUTE ANALYSIS STATISTICS', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Create statistics in columns
+            stats_data = [
+                ['Sharp Turns Detected', str(statistics.get('total_sharp_turns', 0))],
+                ['Critical Turns (≥70°)', str(statistics.get('critical_turns', 0))],
+                ['Points of Interest', str(statistics.get('total_pois', 0))],
+            ]
+            
+            # Add highway statistics if available
+            if not highway_data.get('error'):
+                highway_stats = highway_data.get('statistics', {})
+                stats_data.extend([
+                    ['Major Highways', str(highway_stats.get('total_highways', 0))],
+                    ['Highway Length', f"{highway_stats.get('total_highway_length', 0)} km"]
+                ])
+            
+            # Add terrain statistics if available
+            if not terrain_data.get('error'):
+                confidence = terrain_data.get('confidence_score', 0)
+                stats_data.append(['Terrain Confidence', f"{confidence}%"])
+            
+            self._draw_enhanced_table(pdf, stats_data)
+            
+        except Exception as e:
+            print(f"Error adding statistics section: {e}")
+
+    def _add_enhanced_route_map(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict) -> None:
+        """Add enhanced route map with comprehensive markers"""
+        try:
+            pdf.add_page()
+            
+            # Map header
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            pdf.cell(0, 8, 'APPROVED ROUTE MAP', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Map description
+            pdf.set_font('Helvetica', '', 10)
+            pdf.set_text_color(100, 100, 100)
+            map_description = ("Comprehensive route visualization showing start/end points, critical turns, "
+                            "emergency services, highway junctions, and potential hazards.")
+            
+            # Wrap and display description
+            wrapped_description = self._wrap_text(map_description, 180)
+            for line in wrapped_description:
+                pdf.cell(0, 4, line, 0, 1, 'L')
+            
+            pdf.ln(4)
+            
+            # Generate and add map image
+            route_id = enhanced_data.get('route_info', {}).get('id')
+            if route_id:
+                map_image_path = self._generate_enhanced_map_image(enhanced_data)
+                if map_image_path:
+                    # Calculate image dimensions
+                    page_width = pdf.w - 2 * pdf.l_margin
+                    image_width = min(180, page_width)
+                    image_height = 120
+                    
+                    # Center the image
+                    x_pos = (pdf.w - image_width) / 2
+                    y_pos = pdf.get_y()
+                    
+                    # Add image
+                    try:
+                        pdf.image(map_image_path, x_pos, y_pos, image_width, image_height)
+                        pdf.set_y(y_pos + image_height + 5)
+                        
+                        # Clean up temporary file
+                        import os
+                        if os.path.exists(map_image_path):
+                            os.unlink(map_image_path)
+                            
+                    except Exception as e:
+                        print(f"Error adding map image: {e}")
+                        self._add_map_placeholder(pdf)
+                else:
+                    self._add_map_placeholder(pdf)
+            else:
+                self._add_map_placeholder(pdf)
+            
+            # Map legend
+            self._add_map_legend(pdf)
+            pdf.add_page()
+            self._add_safety_compliance_table(pdf, enhanced_data)
+            pdf.add_page()
+            # ADD NEW: High-Risk Zones & Key Risk Points Table
+            route_id = enhanced_data.get('route_info', {}).get('id')
+            if route_id:
+                self._add_high_risk_zones_table(pdf, enhanced_data, route_id)
+                pdf.add_page()
+                # ADD NEW: Seasonal Road Conditions & Traffic Patterns Table
+                self._add_seasonal_conditions_table(pdf, enhanced_data, route_id)
+                # ADD NEW: Environmental & Local Considerations Table
+                pdf.add_page()
+                self._add_environmental_considerations_table(pdf, enhanced_data, route_id)
+            # ADD NEW: Static Guidelines Tables
+            pdf.add_page()
+            self._add_environmental_guidelines_table(pdf)
+            pdf.add_page()
+            self._add_defensive_driving_guidelines_table(pdf)
+
+            
+        except Exception as e:
+            print(f"Error adding enhanced route map: {e}")
+
+    def _generate_enhanced_map_image(self, enhanced_data: Dict) -> Optional[str]:
+        """Generate enhanced route map with comprehensive markers"""
+        try:
+            route_points = enhanced_data.get('route_points', [])
+            if not route_points:
+                return None
+            
+            # Check if we have map enhancer available
+            from utils.map_enhancer import MapEnhancer
+            
+            if not hasattr(self, 'api_tracker'):
+                print("API tracker not available for map generation")
+                return None
+                
+            map_enhancer = MapEnhancer(self.api_tracker)
+            markers = map_enhancer.generate_comprehensive_markers(enhanced_data)
+            
+            # Generate Google Static Maps URL with enhanced markers
+            google_api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
+            if not google_api_key:
+                print("Google Maps API key not available for map generation")
+                return None
+            
+            # Calculate map center
+            all_lats = [point['latitude'] for point in route_points]
+            all_lngs = [point['longitude'] for point in route_points]
+            center_lat = sum(all_lats) / len(all_lats)
+            center_lng = sum(all_lngs) / len(all_lngs)
+            
+            # Calculate zoom level
+            lat_span = max(all_lats) - min(all_lats)
+            lng_span = max(all_lngs) - min(all_lngs)
+            max_span = max(lat_span, lng_span)
+            
+            if max_span <= 0.05:
+                zoom = 13
+            elif max_span <= 0.1:
+                zoom = 12
+            elif max_span <= 0.2:
+                zoom = 11
+            elif max_span <= 0.5:
+                zoom = 10
+            else:
+                zoom = 9
+            
+            # Create route path
+            path_points = route_points[::max(1, len(route_points)//40)]  # Sample points
+            path_string = '|'.join([f"{point['latitude']},{point['longitude']}" for point in path_points])
+            
+            # Build marker strings
+            marker_strings = []
+            marker_count = 0
+            
+            for marker in markers[:40]:  # Limit to 40 markers for URL length
+                if marker_count >= 40:
+                    break
+                    
+                color = marker.get('icon', 'red')
+                label = marker.get('label', '')
+                size = marker.get('size', 'small')
+                lat = marker.get('latitude', 0)
+                lng = marker.get('longitude', 0)
+                
+                marker_string = f"color:{color}|size:{size}"
+                if label:
+                    marker_string += f"|label:{label}"
+                marker_string += f"|{lat},{lng}"
+                
+                marker_strings.append(marker_string)
+                marker_count += 1
+            
+            # Build Static Maps URL
+            base_url = "https://maps.googleapis.com/maps/api/staticmap"
+            params = [
+                f"center={center_lat},{center_lng}",
+                f"zoom={zoom}",
+                "size=800x600",
+                "maptype=roadmap",
+                f"key={google_api_key}",
+                f"path=color:0x0000ff|weight:3|{path_string}"
+            ]
+            
+            # Add markers
+            for marker_string in marker_strings:
+                params.append(f"markers={marker_string}")
+            
+            final_url = f"{base_url}?" + "&".join(params)
+            
+            # Download and save image
+            try:
+                import requests
+                response = requests.get(final_url, timeout=30)
+                if response.status_code == 200:
+                    # Save to temporary file
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+                        temp_file.write(response.content)
+                        return temp_file.name
+            except Exception as e:
+                print(f"Error downloading map image: {e}")
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error generating enhanced map image: {e}")
+            return None
+
+    def _add_map_placeholder(self, pdf: 'EnhancedRoutePDF') -> None:
+        """Add placeholder when map cannot be generated"""
+        try:
+            # Draw placeholder rectangle
+            placeholder_width = 180
+            placeholder_height = 120
+            x_pos = (pdf.w - placeholder_width) / 2
+            y_pos = pdf.get_y()
+            
+            # Draw border
+            pdf.set_draw_color(200, 200, 200)
+            pdf.rect(x_pos, y_pos, placeholder_width, placeholder_height)
+            
+            # Add text
+            pdf.set_font('Helvetica', 'B', 16)
+            pdf.set_text_color(150, 150, 150)
+            pdf.set_xy(x_pos + 10, y_pos + 50)
+            pdf.cell(placeholder_width - 20, 10, 'Enhanced Route Map', 0, 1, 'C')
+            pdf.set_xy(x_pos + 10, y_pos + 65)
+            pdf.cell(placeholder_width - 20, 10, 'Map generation not available', 0, 1, 'C')
+            
+            pdf.set_y(y_pos + placeholder_height + 5)
+            
+        except Exception as e:
+            print(f"Error adding map placeholder: {e}")
+
+    def _add_map_legend(self, pdf: 'EnhancedRoutePDF') -> None:
+        """Add comprehensive map legend"""
+        try:
+            pdf.ln(5)
+            
+            # Legend header
+            pdf.set_font('Helvetica', 'B', 12)
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(0, 6, 'MAP LEGEND', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Legend items
+            legend_items = [
+                ('A', 'Route Start Point'),
+                ('B', 'Route End Point'),
+                ('T#', 'Critical Sharp Turns'),
+                ('H', 'Hospitals'),
+                ('P', 'Police Stations'),
+                ('F', 'Fire Stations'),
+                ('G', 'Gas Stations'),
+                ('S', 'Schools/Education'),
+                ('*', 'Highway Junctions')
+            ]
+            
+            # Display legend in two columns
+            pdf.set_font('Helvetica', '', 9)
+            col_width = 90
+            
+            for i, (icon, description) in enumerate(legend_items):
+                if i % 2 == 0:
+                    # Left column
+                    x_pos = pdf.l_margin
+                else:
+                    # Right column
+                    x_pos = pdf.l_margin + col_width
+                
+                if i % 2 == 0 and i > 0:
+                    pdf.ln(4)
+                
+                y_pos = pdf.get_y()
+                pdf.set_xy(x_pos, y_pos)
+                
+                # Icon and description
+                pdf.set_font('Helvetica', 'B', 9)
+                pdf.cell(15, 4, icon, 0, 0, 'C')
+                pdf.set_font('Helvetica', '', 9)
+                pdf.cell(col_width - 15, 4, description, 0, 0, 'L')
+            
+            pdf.ln(8)
+            
+        except Exception as e:
+            print(f"Error adding map legend: {e}")
+
+    def _wrap_text(self, text: str, max_width: float) -> List[str]:
+        """Wrap text to fit within specified width"""
+        words = text.split()
+        lines = []
+        current_line = ""
         
-        # Continue with existing recommendations section...
+        for word in words:
+            test_line = f"{current_line} {word}".strip()
+            # Approximate character width (this is rough estimation)
+            if len(test_line) * 2.5 <= max_width:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
         
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 8, 'IDENTIFIED RISK FACTORS', 0, 1, 'L')
+        if current_line:
+            lines.append(current_line)
         
-        risk_factors = []
-        if stats['extreme_turns'] > 0:
-            risk_factors.append(f"• {stats['extreme_turns']} extreme turns requiring extreme caution (+{stats['extreme_turns']*20} risk points)")
-        if stats['blind_spots'] > 0:
-            risk_factors.append(f"• {stats['blind_spots']} blind spot areas with limited visibility (+{stats['blind_spots']*15} risk points)")
-        if stats['dead_zones'] > 0:
-            risk_factors.append(f"• {stats['dead_zones']} communication dead zones (+{stats['dead_zones']*8} risk points)")
-        if stats['poor_coverage_zones'] > 0:
-            risk_factors.append(f"• {stats['poor_coverage_zones']} areas with poor network coverage (+{stats['poor_coverage_zones']*4} risk points)")
+        return lines
+
+    def _add_page_header(self, pdf: 'EnhancedRoutePDF', title: str, icon: str = "") -> None:
+        """Add consistent page header"""
+        try:
+            pdf.set_font('Helvetica', 'B', 16)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            
+            header_text = f"{icon} {title}" if icon else title
+            pdf.cell(0, 10, header_text, 0, 1, 'C')
+            pdf.ln(5)
+            
+            # Add line under header
+            pdf.set_draw_color(0, 82, 163)
+            pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+            pdf.ln(10)
+            
+        except Exception as e:
+            print(f"Error adding page header: {e}")
+
+    def _add_error_message(self, pdf: 'EnhancedRoutePDF', message: str) -> None:
+        """Add error message to PDF"""
+        try:
+            pdf.set_font('Helvetica', '', 12)
+            pdf.set_text_color(220, 53, 69)  # Red color
+            pdf.cell(0, 10, f"Error: {message}", 0, 1, 'C')
+            pdf.ln(5)
+        except Exception as e:
+            print(f"Error adding error message: {e}")
+
+    def _add_seasonal_conditions_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict, route_id: str) -> None:
+        """Add Seasonal Road Conditions & Traffic Patterns table with dynamic route-based data"""
+        try:
+            pdf.ln(10)
+            
+            # Seasonal conditions header
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            pdf.cell(0, 8, 'SEASONAL ROAD CONDITIONS & TRAFFIC PATTERNS', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Get route data for seasonal analysis
+            highway_data = enhanced_data.get('highways', {})
+            terrain_data = enhanced_data.get('terrain', {})
+            route_info = enhanced_data.get('route_info', {})
+            
+            # Compile seasonal conditions based on actual route
+            seasonal_conditions = self._compile_seasonal_conditions(route_id, enhanced_data)
+            
+            if not seasonal_conditions:
+                pdf.set_font('Helvetica', 'I', 10)
+                pdf.set_text_color(120, 120, 120)
+                pdf.cell(0, 6, 'Seasonal analysis pending - general precautions recommended.', 0, 1, 'L')
+                return
+            
+            # Table headers
+            pdf.set_font('Helvetica', 'B', 9)
+            pdf.set_text_color(255, 255, 255)  # White text
+            pdf.set_fill_color(0, 82, 163)  # HPCL blue background
+            
+            # Define column widths for seasonal table
+            col_widths = [25, 50, 55, 60]  # Season, Critical Stretches, Challenges, Driver Caution
+            headers = ['Season / Condition', 'Critical Stretches / Coordinates / Roads', 'Typical Challenges', 'Driver Caution']
+            
+            # Draw table header
+            x_start = pdf.get_x()
+            y_start = pdf.get_y()
+            
+            for i, header in enumerate(headers):
+                pdf.rect(x_start + sum(col_widths[:i]), y_start, col_widths[i], 10, 'F')
+                pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2)
+                
+                # Wrap header text
+                lines = self._wrap_text(header, col_widths[i] - 2)
+                for j, line in enumerate(lines[:2]):  # Max 2 lines
+                    pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2 + (j * 3))
+                    pdf.cell(col_widths[i] - 2, 3, line, 0, 0, 'C')
+            
+            pdf.set_xy(x_start, y_start + 10)
+            
+            # Draw table rows
+            row_height = 12
+            for i, condition in enumerate(seasonal_conditions):
+                y_pos = pdf.get_y()
+                
+                # Alternate row colors
+                if i % 2 == 0:
+                    pdf.set_fill_color(248, 249, 250)  # Light gray
+                else:
+                    pdf.set_fill_color(255, 255, 255)  # White
+                
+                # Draw row background
+                pdf.rect(x_start, y_pos, sum(col_widths), row_height, 'F')
+                
+                # Set text color based on season
+                season = condition.get('season', '').lower()
+                if 'summer' in season:
+                    pdf.set_text_color(255, 87, 34)  # Orange
+                elif 'monsoon' in season:
+                    pdf.set_text_color(33, 150, 243)  # Blue
+                elif 'winter' in season:
+                    pdf.set_text_color(96, 125, 139)  # Blue-gray
+                elif 'congestion' in season:
+                    pdf.set_text_color(244, 67, 54)  # Red
+                else:
+                    pdf.set_text_color(76, 175, 80)  # Green
+                
+                # Prepare row data
+                row_data = [
+                    condition.get('season', 'General'),
+                    condition.get('critical_stretches', 'Route sections'),
+                    condition.get('typical_challenges', 'Standard precautions'),
+                    condition.get('driver_caution', 'Exercise caution')
+                ]
+                
+                # Draw cells with text wrapping
+                for j, (data, width) in enumerate(zip(row_data, col_widths)):
+                    x_pos = x_start + sum(col_widths[:j])
+                    pdf.set_xy(x_pos + 1, y_pos + 1)
+                    
+                    pdf.set_font('Helvetica', '', 8)
+                    
+                    # Wrap text to fit in cell
+                    lines = self._wrap_text(str(data), width - 2)
+                    for k, line in enumerate(lines[:3]):  # Max 3 lines per cell
+                        pdf.set_xy(x_pos + 1, y_pos + 1 + (k * 3.5))
+                        pdf.cell(width - 2, 3.5, line, 0, 0, 'L')
+                
+                pdf.set_xy(x_start, y_pos + row_height)
+            
+            # Add seasonal summary
+            pdf.ln(5)
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.set_text_color(0, 82, 163)
+            pdf.cell(0, 6, f'SEASONAL ANALYSIS: {len(seasonal_conditions)} conditions identified for route', 0, 1, 'L')
+            
+            # Current season recommendation
+            current_season = self._get_current_season()
+            pdf.set_font('Helvetica', 'I', 9)
+            pdf.set_text_color(120, 120, 120)
+            season_note = f"Current season: {current_season}. Review relevant conditions above before departure."
+            pdf.cell(0, 4, season_note, 0, 1, 'L')
+            
+            print(f"✅ Added seasonal conditions table with {len(seasonal_conditions)} conditions")
+            
+        except Exception as e:
+            print(f"❌ Error adding seasonal conditions table: {e}")
+
+    def _compile_seasonal_conditions(self, route_id: str, enhanced_data: Dict) -> List[Dict]:
+        """Compile seasonal conditions based on actual route data"""
+        try:
+            seasonal_conditions = []
+            
+            # Get route data
+            highway_data = enhanced_data.get('highways', {})
+            terrain_data = enhanced_data.get('terrain', {})
+            route_info = enhanced_data.get('route_info', {})
+            route_points = enhanced_data.get('route_points', [])
+            
+            highways = highway_data.get('highways', []) if not highway_data.get('error') else []
+            terrain_type = terrain_data.get('terrain_type', 'Mixed') if not terrain_data.get('error') else 'Mixed'
+            
+            # 1. SUMMER CONDITIONS based on actual highways and terrain
+            summer_conditions = self._get_summer_conditions(highways, terrain_type, route_points)
+            seasonal_conditions.extend(summer_conditions)
+            
+            # 2. MONSOON CONDITIONS based on terrain and elevation
+            monsoon_conditions = self._get_monsoon_conditions(route_id, highways, terrain_type, route_points)
+            seasonal_conditions.extend(monsoon_conditions)
+            
+            # 3. WINTER CONDITIONS based on elevation and terrain
+            winter_conditions = self._get_winter_conditions(route_id, terrain_type, route_points)
+            seasonal_conditions.extend(winter_conditions)
+            
+            # 4. HIGH CONGESTION AREAS from traffic data
+            congestion_conditions = self._get_congestion_conditions(route_id, route_points)
+            seasonal_conditions.extend(congestion_conditions)
+            
+            # 5. SCHOOL ZONES from POI data
+            school_conditions = self._get_school_zone_conditions(route_id, route_points)
+            seasonal_conditions.extend(school_conditions)
+            
+            # 6. TOLL PLAZAS from highway data
+            toll_conditions = self._get_toll_plaza_conditions(highways, route_points)
+            seasonal_conditions.extend(toll_conditions)
+            
+            return seasonal_conditions
+            
+        except Exception as e:
+            print(f"Error compiling seasonal conditions: {e}")
+            return []
+
+    def _get_summer_conditions(self, highways: List[Dict], terrain_type: str, route_points: List[Dict]) -> List[Dict]:
+        """Get summer-specific conditions based on route"""
+        summer_conditions = []
         
-        if not risk_factors:
-            risk_factors.append("• No significant risk factors identified (0 risk points)")
+        # Summer conditions for highways
+        for highway in highways[:3]:  # Top 3 highways
+            highway_name = highway.get('highway_name', 'Unknown')
+            start_coords = f"{highway.get('start_latitude', 0):.1f}, {highway.get('start_longitude', 0):.1f}"
+            end_coords = f"{highway.get('end_latitude', 0):.1f}, {highway.get('end_longitude', 0):.1f}"
+            
+            if highway_name.startswith('NH'):
+                challenges = "High temperatures → vehicle overheating, tire blowouts"
+                caution = "Pre-check cooling systems, carry extra water"
+            else:
+                challenges = "Heat stress for drivers, risk of dehydration"
+                caution = "Wear cotton clothing, frequent hydration stops"
+            
+            summer_conditions.append({
+                'season': 'Summer',
+                'critical_stretches': f"{highway_name} ({start_coords} to {end_coords})",
+                'typical_challenges': challenges,
+                'driver_caution': caution
+            })
         
-        pdf.set_font('Helvetica', '', 10)
-        for factor in risk_factors:
-            pdf.cell(0, 6, factor, 0, 1, 'L')
+        # Terrain-based summer conditions
+        if 'Rural' in terrain_type or 'Plains' in terrain_type:
+            if route_points:
+                start_coord = f"{route_points[0]['latitude']:.1f}, {route_points[0]['longitude']:.1f}"
+                end_coord = f"{route_points[-1]['latitude']:.1f}, {route_points[-1]['longitude']:.1f}"
+                
+                summer_conditions.append({
+                    'season': 'Summer',
+                    'critical_stretches': f"Rural plains section ({start_coord} to {end_coord})",
+                    'typical_challenges': "Extreme heat exposure, limited shade, dust storms",
+                    'driver_caution': "Plan travel during cooler hours, carry sun protection"
+                })
         
-        # Enhanced recommendations based on risk points
-        pdf.ln(10)
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.set_text_color(*self.info_color)
-        pdf.cell(0, 8, ' RISK-BASED SAFETY RECOMMENDATIONS', 0, 1, 'L')
+        return summer_conditions
+
+    def _get_monsoon_conditions(self, route_id: str, highways: List[Dict], terrain_type: str, route_points: List[Dict]) -> List[Dict]:
+        """Get monsoon-specific conditions"""
+        monsoon_conditions = []
         
-        recommendations = []
-        if risk_points >= 150:
-            recommendations.extend([
-                "CRITICAL: Consider alternative route - current route extremely dangerous",
-                "If route unavoidable: Convoy travel mandatory, satellite communication required",
-                "Emergency response plan required, inform authorities of travel"
-            ])
-        elif risk_points >= 100:
-            recommendations.extend([
-                "HIGH RISK: Enhanced safety protocols required",
-                "Reduce speed by 50% in all identified risk zones",
-                "Carry satellite communication and emergency equipment"
-            ])
-        elif risk_points >= 50:
-            recommendations.extend([
-                "MODERATE RISK: Standard enhanced precautions",
-                "Reduce speed at identified sharp turns and blind spots",
-                "Carry emergency communication devices for dead zones"
-            ])
+        # Check for elevation changes (ghat sections)
+        elevation_risks = self._get_elevation_monsoon_risks(route_id, route_points)
+        monsoon_conditions.extend(elevation_risks)
+        
+        # Highway-specific monsoon risks
+        for highway in highways[:2]:
+            highway_name = highway.get('highway_name', 'Unknown')
+            start_coords = f"{highway.get('start_latitude', 0):.1f}, {highway.get('start_longitude', 0):.1f}"
+            end_coords = f"{highway.get('end_latitude', 0):.1f}, {highway.get('end_longitude', 0):.1f}"
+            
+            if 'Hilly' in terrain_type or 'Mountainous' in terrain_type:
+                challenges = "Risk of landslides, slippery surfaces"
+                caution = "Avoid sudden braking, maintain safe distance"
+            else:
+                challenges = "Waterlogging, reduced visibility, flooding"
+                caution = "Slow down, use wipers, headlights on, plan for delays"
+            
+            monsoon_conditions.append({
+                'season': 'Monsoon',
+                'critical_stretches': f"{highway_name} ({start_coords} to {end_coords})",
+                'typical_challenges': challenges,
+                'driver_caution': caution
+            })
+        
+        return monsoon_conditions
+
+    def _get_winter_conditions(self, route_id: str, terrain_type: str, route_points: List[Dict]) -> List[Dict]:
+        """Get winter-specific conditions"""
+        winter_conditions = []
+        
+        # Winter conditions based on terrain
+        if 'Hilly' in terrain_type or 'Mountainous' in terrain_type or 'plateau' in terrain_type.lower():
+            if route_points:
+                sample_points = route_points[::max(1, len(route_points)//3)]  # Sample 3 points
+                
+                for i, point in enumerate(sample_points):
+                    coords = f"{point['latitude']:.1f}, {point['longitude']:.1f}"
+                    
+                    winter_conditions.append({
+                        'season': 'Winter',
+                        'critical_stretches': f"Elevated section {i+1} ({coords}) - {terrain_type.lower()} stretches",
+                        'typical_challenges': "Morning fog, poor visibility, potential ice formation",
+                        'driver_caution': "Use fog lamps, reduce speed, avoid early starts"
+                    })
+        
+        # Urban winter conditions
+        if 'Urban' in terrain_type:
+            urban_points = route_points[len(route_points)//3:2*len(route_points)//3] if route_points else []
+            if urban_points:
+                urban_coord = f"{urban_points[0]['latitude']:.1f}, {urban_points[0]['longitude']:.1f}"
+                
+                winter_conditions.append({
+                    'season': 'Winter',
+                    'critical_stretches': f"Urban areas ({urban_coord})",
+                    'typical_challenges': "High congestion and fog impact during early mornings",
+                    'driver_caution': "Extra caution, follow slow-moving traffic"
+                })
+        
+        return winter_conditions
+
+    def _get_congestion_conditions(self, route_id: str, route_points: List[Dict]) -> List[Dict]:
+        """Get high congestion area conditions from traffic data"""
+        try:
+            import sqlite3
+            
+            congestion_conditions = []
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT latitude, longitude, congestion_level, current_speed
+                    FROM traffic_data 
+                    WHERE route_id = ? AND congestion_level = 'HEAVY'
+                    LIMIT 3
+                """, (route_id,))
+                
+                traffic_data = [dict(row) for row in cursor.fetchall()]
+                
+                for i, traffic in enumerate(traffic_data):
+                    coords = f"{traffic['latitude']:.1f}, {traffic['longitude']:.1f}"
+                    speed = traffic.get('current_speed', 25)
+                    
+                    congestion_conditions.append({
+                        'season': 'High Congestion Areas',
+                        'critical_stretches': f"Congestion zone {i+1} ({coords})",
+                        'typical_challenges': f"Urban congestion, slow traffic during peak hours (avg: {speed} km/h)",
+                        'driver_caution': "Avoid peak hours, plan safe stops, maintain patience"
+                    })
+            
+            return congestion_conditions
+            
+        except Exception as e:
+            return []
+
+    def _get_school_zone_conditions(self, route_id: str, route_points: List[Dict]) -> List[Dict]:
+        """Get school zone conditions from POI data"""
+        try:
+            school_conditions = []
+            schools = self.db_manager.get_pois_by_type(route_id, 'school')
+            
+            for i, school in enumerate(schools[:3]):  # Top 3 schools
+                if school.get('latitude', 0) != 0 and school.get('longitude', 0) != 0:
+                    coords = f"{school['latitude']:.1f}, {school['longitude']:.1f}"
+                    school_name = school.get('name', f'School {i+1}')
+                    
+                    school_conditions.append({
+                        'season': 'Schools',
+                        'critical_stretches': f"{school_name} ({coords})",
+                        'typical_challenges': "Children crossing, school vehicles, increased pedestrian activity",
+                        'driver_caution': "Slow down, watch for pedestrian crossings, school timings: 7-9 AM, 2-4 PM"
+                    })
+            
+            return school_conditions
+            
+        except Exception as e:
+            return []
+
+    def _get_toll_plaza_conditions(self, highways: List[Dict], route_points: List[Dict]) -> List[Dict]:
+        """Get toll plaza conditions based on highways"""
+        toll_conditions = []
+        
+        # Identify major highways with likely toll plazas
+        for highway in highways:
+            highway_name = highway.get('highway_name', 'Unknown')
+            
+            if highway_name.startswith('NH'):  # National highways typically have tolls
+                # Estimate toll plaza location (usually mid-point of highway segment)
+                mid_lat = (highway.get('start_latitude', 0) + highway.get('end_latitude', 0)) / 2
+                mid_lng = (highway.get('start_longitude', 0) + highway.get('end_longitude', 0)) / 2
+                coords = f"{mid_lat:.1f}, {mid_lng:.1f}"
+                
+                toll_conditions.append({
+                    'season': 'Toll Plazas',
+                    'critical_stretches': f"{highway_name} - Estimated toll plaza ({coords})",
+                    'typical_challenges': "Buildup of queues during peak times, payment delays",
+                    'driver_caution': "Plan breaks before toll, ensure lane discipline, keep exact change/FASTag ready"
+                })
+        
+        return toll_conditions[:2]  # Limit to 2 toll plazas
+
+    def _get_elevation_monsoon_risks(self, route_id: str, route_points: List[Dict]) -> List[Dict]:
+        """Get monsoon-specific elevation risks"""
+        try:
+            import sqlite3
+            
+            elevation_risks = []
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT latitude, longitude, elevation 
+                    FROM elevation_data 
+                    WHERE route_id = ? 
+                    ORDER BY elevation DESC
+                    LIMIT 3
+                """, (route_id,))
+                
+                elevation_data = [dict(row) for row in cursor.fetchall()]
+                
+                for i, elev in enumerate(elevation_data):
+                    if elev['elevation'] > 500:  # Elevated areas
+                        coords = f"{elev['latitude']:.1f}, {elev['longitude']:.1f}"
+                        
+                        elevation_risks.append({
+                            'season': 'Monsoon',
+                            'critical_stretches': f"Elevated section {i+1} ({coords}) - {elev['elevation']:.0f}m elevation",
+                            'typical_challenges': "Landslide risk, water accumulation, steep gradients",
+                            'driver_caution': "Extra slow speed, avoid stopping on slopes, check weather updates"
+                        })
+            
+            return elevation_risks
+            
+        except Exception as e:
+            return []
+
+    def _get_current_season(self) -> str:
+        """Get current season based on date"""
+        import datetime
+        
+        month = datetime.datetime.now().month
+        
+        if month in [12, 1, 2]:
+            return "Winter"
+        elif month in [3, 4, 5]:
+            return "Summer"
+        elif month in [6, 7, 8, 9]:
+            return "Monsoon"
         else:
-            recommendations.extend([
-                "LOW RISK: Standard safety precautions sufficient",
-                "Maintain awareness at moderate turns",
-                "Monitor weather conditions before and during travel"
-            ])
+            return "Post-Monsoon"
+    def _add_environmental_considerations_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict, route_id: str) -> None:
+        """Add Environmental & Local Considerations table with dynamic route-based data"""
+        try:
+            pdf.ln(10)
+            
+            # Environmental considerations header
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            pdf.cell(0, 8, 'ENVIRONMENTAL & LOCAL CONSIDERATIONS', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Compile environmental and local considerations
+            environmental_zones = self._compile_environmental_considerations(route_id, enhanced_data)
+            
+            if not environmental_zones:
+                pdf.set_font('Helvetica', 'I', 10)
+                pdf.set_text_color(120, 120, 120)
+                pdf.cell(0, 6, 'No specific environmental considerations identified for this route.', 0, 1, 'L')
+                return
+            
+            # Table headers
+            pdf.set_font('Helvetica', 'B', 8)
+            pdf.set_text_color(255, 255, 255)  # White text
+            pdf.set_fill_color(0, 82, 163)  # HPCL blue background
+            
+            # Define column widths for environmental table
+            col_widths = [30, 45, 25, 35, 55]  # Zone, Location, Coordinates, Located On/Near, Environmental Risk
+            headers = ['Zone / Area', 'Location / Stretch', 'Coordinates', 'Located On / Near', 'Environmental / Local Risk']
+            
+            # Draw table header
+            x_start = pdf.get_x()
+            y_start = pdf.get_y()
+            
+            for i, header in enumerate(headers):
+                pdf.rect(x_start + sum(col_widths[:i]), y_start, col_widths[i], 10, 'F')
+                pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2)
+                
+                # Wrap header text
+                lines = self._wrap_text(header, col_widths[i] - 2)
+                for j, line in enumerate(lines[:2]):  # Max 2 lines
+                    pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2 + (j * 3))
+                    pdf.cell(col_widths[i] - 2, 3, line, 0, 0, 'C')
+            
+            pdf.set_xy(x_start, y_start + 10)
+            
+            # Draw table rows
+            row_height = 14
+            for i, zone in enumerate(environmental_zones):
+                y_pos = pdf.get_y()
+                
+                # Alternate row colors
+                if i % 2 == 0:
+                    pdf.set_fill_color(248, 249, 250)  # Light gray
+                else:
+                    pdf.set_fill_color(255, 255, 255)  # White
+                
+                # Draw row background
+                pdf.rect(x_start, y_pos, sum(col_widths), row_height, 'F')
+                
+                # Set text color based on zone type
+                zone_type = zone.get('zone_type', '').lower()
+                if 'eco-sensitive' in zone_type or 'wildlife' in zone_type:
+                    pdf.set_text_color(76, 175, 80)  # Green
+                elif 'waterbody' in zone_type or 'river' in zone_type:
+                    pdf.set_text_color(33, 150, 243)  # Blue
+                elif 'school' in zone_type or 'children' in zone_type:
+                    pdf.set_text_color(255, 152, 0)  # Orange
+                elif 'market' in zone_type or 'festival' in zone_type:
+                    pdf.set_text_color(156, 39, 176)  # Purple
+                elif 'dense population' in zone_type or 'urban' in zone_type:
+                    pdf.set_text_color(244, 67, 54)  # Red
+                else:
+                    pdf.set_text_color(96, 125, 139)  # Blue-gray
+                
+                # Prepare row data
+                row_data = [
+                    zone.get('zone_type', 'Environmental Zone'),
+                    zone.get('location_stretch', 'Route section'),
+                    zone.get('coordinates', 'N/A'),
+                    zone.get('located_on_near', 'Along route'),
+                    zone.get('environmental_risk', 'Standard precautions required')
+                ]
+                
+                # Draw cells with text wrapping
+                for j, (data, width) in enumerate(zip(row_data, col_widths)):
+                    x_pos = x_start + sum(col_widths[:j])
+                    pdf.set_xy(x_pos + 1, y_pos + 1)
+                    
+                    pdf.set_font('Helvetica', '', 7)
+                    
+                    # Wrap text to fit in cell
+                    lines = self._wrap_text(str(data), width - 2)
+                    for k, line in enumerate(lines[:4]):  # Max 4 lines per cell
+                        pdf.set_xy(x_pos + 1, y_pos + 1 + (k * 3))
+                        pdf.cell(width - 2, 3, line, 0, 0, 'L')
+                
+                pdf.set_xy(x_start, y_pos + row_height)
+            
+            # Add environmental summary
+            pdf.ln(5)
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.set_text_color(0, 82, 163)
+            pdf.cell(0, 6, f'ENVIRONMENTAL SUMMARY: {len(environmental_zones)} zones requiring special attention', 0, 1, 'L')
+            
+            # Zone type counts
+            zone_counts = {}
+            for zone in environmental_zones:
+                zone_type = zone.get('zone_type', 'Other')
+                zone_counts[zone_type] = zone_counts.get(zone_type, 0) + 1
+            
+            pdf.set_font('Helvetica', '', 9)
+            pdf.set_text_color(100, 100, 100)
+            summary_parts = []
+            for zone_type, count in zone_counts.items():
+                summary_parts.append(f"{zone_type}: {count}")
+            
+            pdf.cell(0, 4, " | ".join(summary_parts), 0, 1, 'L')
+            
+            print(f"✅ Added environmental considerations table with {len(environmental_zones)} zones")
+            
+        except Exception as e:
+            print(f"❌ Error adding environmental considerations table: {e}")
+
+    def _compile_environmental_considerations(self, route_id: str, enhanced_data: Dict) -> List[Dict]:
+        """Compile environmental and local considerations from various data sources"""
+        try:
+            environmental_zones = []
+            
+            # Get route data
+            highway_data = enhanced_data.get('highways', {})
+            terrain_data = enhanced_data.get('terrain', {})
+            route_points = enhanced_data.get('route_points', [])
+            
+            highways = highway_data.get('highways', []) if not highway_data.get('error') else []
+            terrain_type = terrain_data.get('terrain_type', 'Mixed') if not terrain_data.get('error') else 'Mixed'
+            
+            # 1. ECO-SENSITIVE ZONES from environmental database
+            eco_zones = self._get_eco_sensitive_zones(route_id, highways, route_points)
+            environmental_zones.extend(eco_zones)
+            
+            # 2. WATERBODY CROSSINGS from elevation and geographical data
+            waterbody_zones = self._get_waterbody_crossings(route_id, highways, route_points)
+            environmental_zones.extend(waterbody_zones)
+            
+            # 3. SCHOOL ZONES from POI data
+            school_zones = self._get_school_zones(route_id, highways, route_points)
+            environmental_zones.extend(school_zones)
+            
+            # 4. MARKET AREAS from POI and urban analysis
+            market_zones = self._get_market_areas(route_id, terrain_type, route_points)
+            environmental_zones.extend(market_zones)
+            
+            # 5. FESTIVAL/EVENT IMPACT AREAS from urban zones
+            festival_zones = self._get_festival_impact_areas(route_id, terrain_type, highways, route_points)
+            environmental_zones.extend(festival_zones)
+            
+            # 6. DENSE POPULATION AREAS from terrain and POI density
+            population_zones = self._get_dense_population_areas(route_id, terrain_type, route_points)
+            environmental_zones.extend(population_zones)
+            
+            # Sort by priority (eco-sensitive first, then others)
+            priority_order = {
+                'Eco-sensitive Zone': 1,
+                'Waterbody Crossing': 2,
+                'School Zone': 3,
+                'Market Area': 4,
+                'Festival / Event Impact': 5,
+                'Dense Population Area': 6
+            }
+            
+            environmental_zones.sort(key=lambda x: priority_order.get(x.get('zone_type', 'Other'), 7))
+            
+            return environmental_zones
+            
+        except Exception as e:
+            print(f"Error compiling environmental considerations: {e}")
+            return []
+
+    def _get_eco_sensitive_zones(self, route_id: str, highways: List[Dict], route_points: List[Dict]) -> List[Dict]:
+        """Get eco-sensitive zones from environmental database"""
+        try:
+            import sqlite3
+            
+            eco_zones = []
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Get eco-sensitive areas from environmental risks table
+                cursor.execute("""
+                    SELECT latitude, longitude, risk_type, description
+                    FROM environmental_risks 
+                    WHERE route_id = ? AND risk_category = 'ecological'
+                    LIMIT 3
+                """, (route_id,))
+                
+                eco_data = [dict(row) for row in cursor.fetchall()]
+                
+                for i, eco in enumerate(eco_data):
+                    # Find nearest highway
+                    nearest_highway = self._find_nearest_highway(eco['latitude'], eco['longitude'], highways)
+                    
+                    coords = f"{eco['latitude']:.1f}, {eco['longitude']:.1f}"
+                    risk_type = eco.get('risk_type', 'eco_zone').replace('_', ' ').title()
+                    
+                    eco_zones.append({
+                        'zone_type': 'Eco-sensitive Zone',
+                        'location_stretch': f"{risk_type} near route section {i+1}",
+                        'coordinates': coords,
+                        'located_on_near': f"{nearest_highway} near eco-sensitive area",
+                        'environmental_risk': "Increased wildlife movement, no littering, noise restrictions"
+                    })
+            
+            # If no database eco-zones, create based on terrain
+            if not eco_zones and ('Rural' in terrain_type or 'Forest' in terrain_type):
+                sample_points = route_points[::max(1, len(route_points)//4)] if route_points else []
+                
+                for i, point in enumerate(sample_points[:2]):
+                    nearest_highway = self._find_nearest_highway(point['latitude'], point['longitude'], highways)
+                    coords = f"{point['latitude']:.1f}, {point['longitude']:.1f}"
+                    
+                    eco_zones.append({
+                        'zone_type': 'Eco-sensitive Zone',
+                        'location_stretch': f"Rural/forest patch section {i+1}",
+                        'coordinates': coords,
+                        'located_on_near': f"{nearest_highway} through rural area",
+                        'environmental_risk': "Potential wildlife crossing, maintain speed limits, no littering"
+                    })
+            
+            return eco_zones
+            
+        except Exception as e:
+            return []
+
+    def _get_waterbody_crossings(self, route_id: str, highways: List[Dict], route_points: List[Dict]) -> List[Dict]:
+        """Get waterbody crossings from elevation and geographical data"""
+        try:
+            import sqlite3
+            
+            waterbody_zones = []
+            
+            # Look for significant elevation dips (potential river crossings)
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT latitude, longitude, elevation,
+                        LAG(elevation) OVER (ORDER BY id) as prev_elevation,
+                        LEAD(elevation) OVER (ORDER BY id) as next_elevation
+                    FROM elevation_data 
+                    WHERE route_id = ?
+                    ORDER BY id
+                """, (route_id,))
+                
+                elevation_data = [dict(row) for row in cursor.fetchall()]
+                
+                for i, elev in enumerate(elevation_data):
+                    prev_elev = elev.get('prev_elevation', 0)
+                    next_elev = elev.get('next_elevation', 0)
+                    curr_elev = elev.get('elevation', 0)
+                    
+                    # Check for elevation dip (potential bridge/river crossing)
+                    if (prev_elev and next_elev and 
+                        curr_elev < prev_elev - 50 and curr_elev < next_elev - 50):
+                        
+                        nearest_highway = self._find_nearest_highway(elev['latitude'], elev['longitude'], highways)
+                        coords = f"{elev['latitude']:.1f}, {elev['longitude']:.1f}"
+                        
+                        waterbody_zones.append({
+                            'zone_type': 'Waterbody Crossing',
+                            'location_stretch': f"Bridge/river crossing section {len(waterbody_zones)+1}",
+                            'coordinates': coords,
+                            'located_on_near': f"{nearest_highway} river crossing",
+                            'environmental_risk': "Risk of water pollution from spills, reduced speed on bridges"
+                        })
+            
+            return waterbody_zones[:3]  # Limit to 3 crossings
+            
+        except Exception as e:
+            return []
+
+    def _get_school_zones(self, route_id: str, highways: List[Dict], route_points: List[Dict]) -> List[Dict]:
+        """Get school zones from POI data"""
+        try:
+            school_zones = []
+            schools = self.db_manager.get_pois_by_type(route_id, 'school')
+            
+            for i, school in enumerate(schools[:4]):  # Top 4 schools
+                if school.get('latitude', 0) != 0 and school.get('longitude', 0) != 0:
+                    nearest_highway = self._find_nearest_highway(school['latitude'], school['longitude'], highways)
+                    coords = f"{school['latitude']:.1f}, {school['longitude']:.1f}"
+                    school_name = school.get('name', f'School {i+1}')
+                    
+                    school_zones.append({
+                        'zone_type': 'School Zone',
+                        'location_stretch': f"{school_name}",
+                        'coordinates': coords,
+                        'located_on_near': f"Near {nearest_highway}",
+                        'environmental_risk': "Pedestrian activity, reduced speed required (25 km/h), school timings awareness"
+                    })
+            
+            return school_zones
+            
+        except Exception as e:
+            return []
+
+    def _get_market_areas(self, route_id: str, terrain_type: str, route_points: List[Dict]) -> List[Dict]:
+        """Get market areas from POI and urban analysis"""
+        try:
+            market_zones = []
+            
+            # Get restaurants/commercial areas as proxy for markets
+            restaurants = self.db_manager.get_pois_by_type(route_id, 'restaurant')
+            
+            # Cluster nearby restaurants to identify market areas
+            market_clusters = self._cluster_pois_into_markets(restaurants)
+            
+            for i, cluster in enumerate(market_clusters[:3]):  # Top 3 market areas
+                center_lat = sum(poi['latitude'] for poi in cluster) / len(cluster)
+                center_lng = sum(poi['longitude'] for poi in cluster) / len(cluster)
+                
+                nearest_highway = self._find_nearest_highway(center_lat, center_lng, [])
+                coords = f"{center_lat:.1f}, {center_lng:.1f}"
+                
+                market_zones.append({
+                    'zone_type': 'Market Area',
+                    'location_stretch': f"Commercial zone {i+1} ({len(cluster)} establishments)",
+                    'coordinates': coords,
+                    'located_on_near': f"City centre area, local roads",
+                    'environmental_risk': "High foot traffic, unpredictable congestion, parking challenges"
+                })
+            
+            return market_zones
+            
+        except Exception as e:
+            return []
+
+    def _get_festival_impact_areas(self, route_id: str, terrain_type: str, highways: List[Dict], route_points: List[Dict]) -> List[Dict]:
+        """Get festival/event impact areas from urban zones"""
+        try:
+            festival_zones = []
+            
+            # Identify urban areas where festivals are likely
+            if 'Urban' in terrain_type:
+                urban_points = self._get_urban_center_points(route_points)
+                
+                for i, point in enumerate(urban_points[:2]):  # Top 2 urban centers
+                    nearest_highway = self._find_nearest_highway(point['latitude'], point['longitude'], highways)
+                    coords = f"{point['latitude']:.1f}, {point['longitude']:.1f}"
+                    
+                    festival_zones.append({
+                        'zone_type': 'Festival / Event Impact',
+                        'location_stretch': f"Urban centre {i+1} during festivals",
+                        'coordinates': coords,
+                        'located_on_near': f"Urban sections of {nearest_highway} / city roads",
+                        'environmental_risk': "Temporary congestion, diversion of routes likely, increased noise levels"
+                    })
+            
+            return festival_zones
+            
+        except Exception as e:
+            return []
+
+    def _get_dense_population_areas(self, route_id: str, terrain_type: str, route_points: List[Dict]) -> List[Dict]:
+        """Get dense population areas from terrain and POI density"""
+        try:
+            population_zones = []
+            
+            if 'Urban Dense' in terrain_type or 'Urban' in terrain_type:
+                # Get POI density to identify dense areas
+                all_pois = []
+                poi_types = ['hospital', 'school', 'restaurant', 'police', 'fire_station']
+                
+                for poi_type in poi_types:
+                    pois = self.db_manager.get_pois_by_type(route_id, poi_type)
+                    all_pois.extend(pois)
+                
+                # Find areas with high POI density
+                dense_areas = self._identify_dense_areas(all_pois, route_points)
+                
+                for i, area in enumerate(dense_areas[:2]):  # Top 2 dense areas
+                    coords = f"{area['center_lat']:.1f}, {area['center_lng']:.1f}"
+                    
+                    population_zones.append({
+                        'zone_type': 'Dense Population Area',
+                        'location_stretch': f"Urban dense zone {i+1} ({area['poi_count']} facilities)",
+                        'coordinates': coords,
+                        'located_on_near': "Urban zone with high facility density",
+                        'environmental_risk': "High pedestrian traffic, reduced speed & caution, noise pollution"
+                    })
+            
+            return population_zones
+            
+        except Exception as e:
+            return []
+
+    def _find_nearest_highway(self, lat: float, lng: float, highways: List[Dict]) -> str:
+        """Find nearest highway to given coordinates"""
+        if not highways:
+            return "Route section"
         
-        # Universal recommendations
-        recommendations.extend([
-            "- Ensure vehicle is in optimal condition before journey",
-            "- Plan rest stops at safe locations identified in the route",
-            "- Maintain extra distance from other vehicles in risk areas"
-        ])
+        min_distance = float('inf')
+        nearest_highway = "Route section"
         
-        pdf.set_font('Helvetica', '', 10)
-        pdf.set_text_color(0, 0, 0)
-        for rec in recommendations:
-            pdf.cell(0, 6, rec, 0, 1, 'L')
-    
+        for highway in highways:
+            # Calculate distance to highway start point
+            h_lat = highway.get('start_latitude', 0)
+            h_lng = highway.get('start_longitude', 0)
+            
+            if h_lat and h_lng:
+                distance = self._calculate_distance_km([lat, lng], [h_lat, h_lng])
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_highway = highway.get('highway_name', 'Route section')
+        
+        return nearest_highway
+
+    def _cluster_pois_into_markets(self, pois: List[Dict]) -> List[List[Dict]]:
+        """Cluster nearby POIs to identify market areas"""
+        clusters = []
+        used_pois = set()
+        
+        for poi in pois:
+            if poi['id'] in used_pois:
+                continue
+            
+            if poi.get('latitude', 0) == 0 or poi.get('longitude', 0) == 0:
+                continue
+            
+            cluster = [poi]
+            used_pois.add(poi['id'])
+            
+            # Find nearby POIs within 500m
+            for other_poi in pois:
+                if (other_poi['id'] not in used_pois and 
+                    other_poi.get('latitude', 0) != 0 and other_poi.get('longitude', 0) != 0):
+                    
+                    distance = self._calculate_distance_km(
+                        [poi['latitude'], poi['longitude']],
+                        [other_poi['latitude'], other_poi['longitude']]
+                    )
+                    
+                    if distance < 0.5:  # Within 500m
+                        cluster.append(other_poi)
+                        used_pois.add(other_poi['id'])
+            
+            if len(cluster) >= 3:  # Market area needs at least 3 establishments
+                clusters.append(cluster)
+        
+        return clusters
+
+    def _get_urban_center_points(self, route_points: List[Dict]) -> List[Dict]:
+        """Get points that are likely urban centers"""
+        # Simple heuristic: points in the middle sections of the route are more likely urban
+        if len(route_points) < 3:
+            return route_points
+        
+        mid_start = len(route_points) // 4
+        mid_end = 3 * len(route_points) // 4
+        
+        return route_points[mid_start:mid_end:max(1, (mid_end - mid_start) // 3)]
+
+    def _identify_dense_areas(self, all_pois: List[Dict], route_points: List[Dict]) -> List[Dict]:
+        """Identify areas with high POI density"""
+        dense_areas = []
+        
+        # Create grid and count POIs
+        grid_size = 0.05  # ~5km grid
+        poi_grid = {}
+        
+        for poi in all_pois:
+            if poi.get('latitude', 0) != 0 and poi.get('longitude', 0) != 0:
+                grid_lat = round(poi['latitude'] / grid_size) * grid_size
+                grid_lng = round(poi['longitude'] / grid_size) * grid_size
+                grid_key = (grid_lat, grid_lng)
+                
+                if grid_key not in poi_grid:
+                    poi_grid[grid_key] = {'pois': [], 'count': 0}
+                
+                poi_grid[grid_key]['pois'].append(poi)
+                poi_grid[grid_key]['count'] += 1
+        
+        # Find grids with high POI density
+        for (grid_lat, grid_lng), data in poi_grid.items():
+            if data['count'] >= 5:  # At least 5 POIs in grid
+                dense_areas.append({
+                    'center_lat': grid_lat,
+                    'center_lng': grid_lng,
+                    'poi_count': data['count'],
+                    'pois': data['pois']
+                })
+        
+        # Sort by POI count
+        dense_areas.sort(key=lambda x: x['poi_count'], reverse=True)
+        
+        return dense_areas
+    def _add_environmental_guidelines_table(self, pdf: 'EnhancedRoutePDF') -> None:
+        """Add static Environmental & Local Driving Guidelines table for Petroleum Tanker Drivers"""
+        try:
+            pdf.ln(10)
+            
+            # Environmental guidelines header
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            pdf.cell(0, 8, 'NOTES - GENERAL ENVIRONMENTAL & LOCAL DRIVING GUIDELINES FOR PETROLEUM TANKER DRIVERS', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Static environmental guidelines data
+            environmental_guidelines = [
+                ['Eco-sensitive Areas', 'Drive slowly, avoid honking unnecessarily, do not stop for breaks or cleaning in these areas.'],
+                ['Waterbody Crossings', 'Inspect for leaks before entering bridges, no refuelling or repairs on or near bridges.'],
+                ['School & Market Areas', 'Maintain speed limits (25–30 km/h), stay alert for children and pedestrians, avoid peak school/market hours.'],
+                ['Festivals & Local Events', 'Expect road diversions or closures, confirm route with local authorities or control room.'],
+                ['Littering & Pollution Prevention', 'Never discard trash or spill fuel; carry spill kits and clean-up materials as per SOP.'],
+                ['Noise & Cultural Sensitivity', 'Avoid honking in populated areas and during religious or cultural gatherings.'],
+                ['Local Road Regulations', 'Follow local traffic signage and any state-specific restrictions for hazardous cargo.'],
+                ['Coordination with Locals', 'Be courteous to local communities; stop only at designated points for rest, food, or refuelling.']
+            ]
+            
+            # Draw environmental guidelines table
+            self._draw_guidelines_table(pdf, environmental_guidelines, 'Aspect', 'Guidelines / Actions')
+            
+            print("✅ Added environmental guidelines table")
+            
+        except Exception as e:
+            print(f"❌ Error adding environmental guidelines table: {e}")
+
+    def _add_defensive_driving_guidelines_table(self, pdf: 'EnhancedRoutePDF') -> None:
+        """Add static Defensive Driving & Driver Well-being guidelines table"""
+        try:
+            pdf.ln(12)
+            
+            # Defensive driving header
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.set_text_color(0, 82, 163)  # HPCL blue
+            pdf.cell(0, 8, 'DEFENSIVE DRIVING & DRIVER WELL-BEING', 0, 1, 'L')
+            pdf.ln(2)
+            
+            # Static defensive driving guidelines data
+            defensive_driving_guidelines = [
+                ['Maintain safe distance, use indicators', 'Keep a minimum 3-second following distance from the vehicle ahead, adjust for heavy loads; always signal turns or lane changes well in advance.'],
+                ['Stay hydrated: carry water bottles', 'Carry at least 2 liters of drinking water. Avoid dehydration, especially in summer. Drink at rest stops every 1–2 hours.'],
+                ['Avoid heavy/oily meals before journey', 'Eat light, balanced meals to avoid drowsiness and discomfort. Avoid spicy, fried, or heavy foods before and during the trip.'],
+                ['Get at least 8 hours of sleep before starting', 'A good night\'s sleep is essential to reduce fatigue and maintain focus. Never start a trip when tired or drowsy.'],
+                ['Wear weather-appropriate protective gear', 'Use sun protection (caps, sunglasses) in summer; layered clothing in winter; always wear safety shoes and reflective vests.'],
+                ['Control speed based on road conditions', 'Adjust speed for weather, road curves, and heavy vehicle braking distances. Never exceed posted speed limits.'],
+                ['Plan rest breaks every 3 hours', 'Stop for at least 30 minutes to stretch, refresh, and check vehicle condition. Avoid continuous driving for more than 3 hours.'],
+                ['Defensive driving mindset', 'Stay calm, anticipate road users\' actions, avoid aggression. Use mirrors frequently and watch for potential hazards ahead.'],
+                ['Emergency readiness', 'Keep fire extinguisher, first-aid kit, and communication device within easy reach. Be aware of nearest emergency services along the route.']
+            ]
+            
+            # Draw defensive driving guidelines table
+            self._draw_guidelines_table(pdf, defensive_driving_guidelines, 'Checklist Item', 'Detailed Guidelines / Actions')
+            
+            print("✅ Added defensive driving guidelines table")
+            
+        except Exception as e:
+            print(f"❌ Error adding defensive driving guidelines table: {e}")
+
+    def _draw_guidelines_table(self, pdf: 'EnhancedRoutePDF', table_data: List[List[str]], 
+                            header1: str, header2: str) -> None:
+        """Draw guidelines table with consistent formatting"""
+        try:
+            # Table settings
+            col_widths = [50, 140]  # Aspect/Item, Guidelines/Actions
+            row_height = 12
+            
+            # Table headers
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.set_text_color(255, 255, 255)  # White text
+            pdf.set_fill_color(0, 82, 163)  # HPCL blue background
+            
+            # Draw table header
+            x_start = pdf.get_x()
+            y_start = pdf.get_y()
+            
+            # Header 1
+            pdf.rect(x_start, y_start, col_widths[0], 10, 'F')
+            pdf.set_xy(x_start + 2, y_start + 3)
+            pdf.cell(col_widths[0] - 4, 4, header1, 0, 0, 'C')
+            
+            # Header 2
+            pdf.rect(x_start + col_widths[0], y_start, col_widths[1], 10, 'F')
+            pdf.set_xy(x_start + col_widths[0] + 2, y_start + 3)
+            pdf.cell(col_widths[1] - 4, 4, header2, 0, 0, 'C')
+            
+            pdf.set_xy(x_start, y_start + 10)
+            
+            # Draw table rows
+            for i, row in enumerate(table_data):
+                y_pos = pdf.get_y()
+                
+                # Alternate row colors
+                if i % 2 == 0:
+                    pdf.set_fill_color(248, 249, 250)  # Light gray
+                else:
+                    pdf.set_fill_color(255, 255, 255)  # White
+                
+                # Calculate row height based on content
+                aspect_lines = self._wrap_text(row[0], col_widths[0] - 4)
+                guidelines_lines = self._wrap_text(row[1], col_widths[1] - 4)
+                lines_needed = max(len(aspect_lines), len(guidelines_lines))
+                actual_row_height = max(row_height, lines_needed * 4 + 2)
+                
+                # Draw row background
+                pdf.rect(x_start, y_pos, sum(col_widths), actual_row_height, 'F')
+                
+                # Draw cell contents
+                # Aspect/Item column (bold, blue text)
+                pdf.set_font('Helvetica', 'B', 9)
+                pdf.set_text_color(0, 82, 163)  # HPCL blue
+                
+                for j, line in enumerate(aspect_lines):
+                    pdf.set_xy(x_start + 2, y_pos + 2 + (j * 4))
+                    pdf.cell(col_widths[0] - 4, 4, line, 0, 0, 'L')
+                
+                # Guidelines/Actions column (normal text)
+                pdf.set_font('Helvetica', '', 8)
+                pdf.set_text_color(0, 0, 0)  # Black
+                
+                for j, line in enumerate(guidelines_lines):
+                    pdf.set_xy(x_start + col_widths[0] + 2, y_pos + 2 + (j * 4))
+                    pdf.cell(col_widths[1] - 4, 4, line, 0, 0, 'L')
+                
+                # Draw cell borders
+                pdf.set_draw_color(200, 200, 200)
+                pdf.rect(x_start, y_pos, col_widths[0], actual_row_height)
+                pdf.rect(x_start + col_widths[0], y_pos, col_widths[1], actual_row_height)
+                
+                pdf.set_xy(x_start, y_pos + actual_row_height)
+            
+            # Add bottom note
+            pdf.ln(5)
+            pdf.set_font('Helvetica', 'I', 8)
+            pdf.set_text_color(120, 120, 120)
+            pdf.cell(0, 4, 'Note: These guidelines are mandatory for all petroleum tanker operations. Compliance ensures safety and environmental protection.', 0, 1, 'L')
+            
+        except Exception as e:
+            print(f"Error drawing guidelines table: {e}")
     def _add_enhanced_turns_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
         """Add comprehensive sharp turns analysis page with BOTH street view AND satellite visual evidence"""
         

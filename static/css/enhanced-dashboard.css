@@ -1,0 +1,181 @@
+/* static/css/enhanced-dashboard.css - Enhanced styling for route overview */
+/* Purpose: Additional styling for enhanced features */
+/* Author: Enhanced Route Analysis System */
+/* Created: 2024 */
+
+.highway-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #0052a3 0%, #004080 100%);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 2px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.highway-badge.national {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+}
+
+.highway-badge.state {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+}
+
+.highway-badge.district {
+    background: linear-gradient(135deg, #fd7e14 0%, #e07e39 100%);
+}
+
+.terrain-indicator {
+    display: inline-flex;
+    align-items: center;
+    background: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin: 5px 0;
+}
+
+.terrain-indicator.urban {
+    border-color: #007bff;
+    background: #e3f2fd;
+}
+
+.terrain-indicator.rural {
+    border-color: #28a745;
+    background: #e8f5e8;
+}
+
+.terrain-indicator.hilly {
+    border-color: #fd7e14;
+    background: #fff3cd;
+}
+
+.terrain-indicator.mountainous {
+    border-color: #6f42c1;
+    background: #f3e5f5;
+}
+
+.map-container {
+    border: 3px solid #dee2e6;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    margin: 20px 0;
+}
+
+.map-legend {
+    background: #f8f9fa;
+    padding: 15px;
+    border-top: 1px solid #dee2e6;
+    font-size: 0.85rem;
+}
+
+.legend-item {
+    display: inline-block;
+    margin: 5px 10px;
+    white-space: nowrap;
+}
+
+.legend-icon {
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+    margin-right: 5px;
+}
+
+.enhanced-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.stat-card-enhanced {
+    background: white;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-left: 4px solid var(--primary-color);
+    transition: transform 0.2s ease;
+}
+
+.stat-card-enhanced:hover {
+    transform: translateY(-2px);
+}
+
+.stat-value-large {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 5px;
+}
+
+.stat-label-enhanced {
+    color: #6c757d;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.route-info-enhanced {
+    background: white;
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.info-table-enhanced {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.info-table-enhanced td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #f1f3f4;
+    vertical-align: top;
+}
+
+.info-table-enhanced td:first-child {
+    font-weight: 600;
+    color: var(--primary-color);
+    width: 30%;
+}
+
+.info-table-enhanced tr:hover {
+    background-color: #f8f9fa;
+}
+
+.confidence-meter {
+    display: inline-block;
+    width: 100px;
+    height: 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-left: 10px;
+}
+
+.confidence-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #dc3545 0%, #ffc107 50%, #28a745 100%);
+    transition: width 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .enhanced-stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .highway-badge {
+        display: block;
+        margin: 3px 0;
+    }
+    
+    .legend-item {
+        display: block;
+        margin: 3px 0;
+    }
+}

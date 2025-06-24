@@ -45,6 +45,14 @@ try:
 except ImportError as e:
     print(f"⚠️ Emergency Response Analyzer not available: {e}")
     EMERGENCY_AVAILABLE = False
+try:
+    from utils.map_enhancer import MapEnhancer
+    MAP_ENHANCER_AVAILABLE = True
+    print("✅ Map Enhancer imported successfully")
+except ImportError as e:
+    print(f"⚠️ Map Enhancer not available: {e}")
+    MAP_ENHANCER_AVAILABLE = False
+    MapEnhancer = None
 
 class RouteAnalyzer:
     """Complete route analysis with API integration and data storage"""
@@ -74,6 +82,12 @@ class RouteAnalyzer:
         else:
             self.emergency_analyzer = None
             print("⚠️ Emergency Response Analyzer not available - will use basic emergency collection")
+        if MAP_ENHANCER_AVAILABLE and MapEnhancer:
+            self.map_enhancer = MapEnhancer(api_tracker)
+            print("🗺️ Map enhancer initialized")
+        else:
+            self.map_enhancer = None
+            print("⚠️ Map enhancer not available")
         
         # Initialize API clients
         self.google_api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
@@ -185,7 +199,9 @@ class RouteAnalyzer:
             # Step 14: Generate comprehensive map WITH ALL MARKERS
             print("🗺️ Generating comprehensive route map with ALL critical points...")
             self._generate_and_store_route_map(route_id, route_points, sharp_turns)
-            
+            # Step 14: Highway and Terrain Analysis (NEW)
+            print("🛣️ Analyzing highways and terrain...")
+            self._analyze_highways_and_terrain(route_id, route_points)
             print(f"✅ Complete route analysis finished successfully. Route ID: {route_id}")
             print(f"📊 Analysis included: Sharp turns, POIs, Weather, Network, Traffic, Road Quality, Environmental, Emergency")
             return route_id
@@ -1146,4 +1162,110 @@ class RouteAnalyzer:
             print(f"❌ Error generating map: {e}")
             import traceback
             traceback.print_exc()
+            return False
+        # ADD THIS NEW METHOD
+    def _analyze_highways_and_terrain(self, route_id: str, route_points: List[List[float]]) -> bool:
+        """Analyze highways and terrain classification"""
+        try:
+            print("🛣️ Analyzing highways and terrain...")
+            
+            # Get existing data
+            pois = {}
+            poi_types = ['hospital', 'gas_station', 'school', 'restaurant', 'police', 'fire_station']
+            for poi_type in poi_types:
+                pois[poi_type] = self.db_manager.get_pois_by_type(route_id, poi_type)
+            
+            elevation_data = []
+            try:
+                import sqlite3
+                with sqlite3.connect(self.db_manager.db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM elevation_data WHERE route_id = ?", (route_id,))
+                    elevation_data = [dict(row) for row in cursor.fetchall()]
+            except:
+                pass
+            
+            # 1. Detect highways
+            highways = self.map_enhancer.detect_highway_segments(route_points)
+            if highways:
+                self._store_highway_data(route_id, highways)
+            
+            # 2. Classify terrain
+            terrain_data = self.map_enhancer.classify_terrain_zones(route_points, pois, elevation_data)
+            if terrain_data:
+                self._store_terrain_data(route_id, terrain_data)
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Highway and terrain analysis failed: {e}")
+            return False
+
+    # ADD THIS NEW METHOD
+    def _store_highway_data(self, route_id: str, highways: List[Dict]) -> bool:
+        """Store highway data in database"""
+        try:
+            import sqlite3
+            
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                cursor = conn.cursor()
+                
+                stored_count = 0
+                for highway in highways:
+                    cursor.execute("""
+                        INSERT INTO route_highways 
+                        (route_id, highway_name, highway_type, start_latitude, start_longitude,
+                        end_latitude, end_longitude, length_km)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        route_id,
+                        highway.get('highway_name', 'Unknown'),
+                        highway.get('highway_type', 'Unknown'),
+                        highway.get('start_latitude', 0),
+                        highway.get('start_longitude', 0),
+                        highway.get('end_latitude', 0),
+                        highway.get('end_longitude', 0),
+                        highway.get('length_km', 0)
+                    ))
+                    stored_count += 1
+                
+                conn.commit()
+                print(f"✅ Stored {stored_count} highway segments in database")
+                return True
+                
+        except Exception as e:
+            print(f"❌ Error storing highway data: {e}")
+            return False
+
+    # ADD THIS NEW METHOD
+    def _store_terrain_data(self, route_id: str, terrain_data: Dict) -> bool:
+        """Store terrain classification in database"""
+        try:
+            import sqlite3
+            import json
+            
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    INSERT INTO route_terrain 
+                    (route_id, terrain_type, terrain_score, elevation_variance, 
+                    urban_density_score, classification_details)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    route_id,
+                    terrain_data.get('primary_terrain', 'Unknown'),
+                    terrain_data.get('terrain_confidence', 0),
+                    terrain_data.get('elevation_variance', 0),
+                    terrain_data.get('urban_density_score', 0),
+                    json.dumps(terrain_data.get('terrain_breakdown', {}))
+                ))
+                
+                conn.commit()
+                print(f"✅ Stored terrain classification: {terrain_data.get('primary_terrain')}")
+                return True
+                
+        except Exception as e:
+            print(f"❌ Error storing terrain data: {e}")
             return False
