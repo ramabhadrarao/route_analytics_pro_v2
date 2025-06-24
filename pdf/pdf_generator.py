@@ -2211,7 +2211,7 @@ class PDFGenerator:
     # Replace your existing _add_emergency_page method with this improved version
 
     def _add_emergency_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add comprehensive emergency preparedness analysis with REAL DATA"""
+        """Add comprehensive emergency preparedness analysis with REAL DATA - FIXED VERSION"""
         from api.route_api import RouteAPI
         route_api = RouteAPI(self.db_manager, None)
         
@@ -2332,7 +2332,7 @@ class PDFGenerator:
         for service, number, when, response in contact_details:
             pdf.create_table_row([service, number, when, response], col_widths)
         
-        # Emergency Services Along Route - ENHANCED
+        # Emergency Services Along Route - ENHANCED with FIXED formatting
         pdf.add_page()
         pdf.set_font('Helvetica', 'B', 12)
         pdf.set_text_color(*self.info_color)
@@ -2359,12 +2359,19 @@ class PDFGenerator:
                 pdf.create_table_header(headers, col_widths)
                 
                 for i, facility in enumerate(all_medical[:10], 1):
+                    # FIXED: Safely handle distance_km with proper None checking
+                    distance_km = facility.get('distance_km')
+                    if distance_km is not None:
+                        distance_str = f"{distance_km:.1f} km"
+                    else:
+                        distance_str = "Along route"
+                    
                     row_data = [
                         str(i),
                         facility.get('name', 'Unknown Facility')[:25],
                         facility.get('formatted_address', facility.get('address', 'Unknown'))[:25],
                         facility.get('formatted_phone_number', 'Not available'),
-                        f"{facility.get('distance_km', 0):.1f} km"
+                        distance_str
                     ]
                     pdf.create_table_row(row_data, col_widths)
             
@@ -2382,12 +2389,19 @@ class PDFGenerator:
                 pdf.create_table_header(headers, col_widths)
                 
                 for i, station in enumerate(police_stations[:8], 1):
+                    # FIXED: Safely handle distance_km with proper None checking
+                    distance_km = station.get('distance_km')
+                    if distance_km is not None:
+                        distance_str = f"{distance_km:.1f} km"
+                    else:
+                        distance_str = "Along route"
+                    
                     row_data = [
                         str(i),
                         station.get('name', 'Unknown Station')[:25],
                         station.get('formatted_address', station.get('address', 'Unknown'))[:25],
                         station.get('formatted_phone_number', 'Not available'),
-                        f"{station.get('distance_km', 0):.1f} km"
+                        distance_str
                     ]
                     pdf.create_table_row(row_data, col_widths)
             
@@ -2405,12 +2419,19 @@ class PDFGenerator:
                 pdf.create_table_header(headers, col_widths)
                 
                 for i, station in enumerate(fire_stations[:8], 1):
+                    # FIXED: Safely handle distance_km with proper None checking
+                    distance_km = station.get('distance_km')
+                    if distance_km is not None:
+                        distance_str = f"{distance_km:.1f} km"
+                    else:
+                        distance_str = "Along route"
+                    
                     row_data = [
                         str(i),
                         station.get('name', 'Unknown Station')[:25],
                         station.get('formatted_address', station.get('address', 'Unknown'))[:25],
                         station.get('formatted_phone_number', 'Not available'),
-                        f"{station.get('distance_km', 0):.1f} km"
+                        distance_str
                     ]
                     pdf.create_table_row(row_data, col_widths)
         

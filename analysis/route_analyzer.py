@@ -3,6 +3,7 @@
 # Dependencies: googlemaps, requests, PIL, io
 # Author: Route Analysis System
 # Created: 2024
+
 import sys
 import csv
 import os
@@ -17,8 +18,10 @@ import googlemaps
 from PIL import Image
 import io
 import sqlite3
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from translation_before_db import TextTranslator
+
 try:
     from .road_quality_analyzer import RoadQualityAnalyzer
     ROAD_QUALITY_AVAILABLE = True
@@ -42,23 +45,28 @@ try:
 except ImportError as e:
     print(f"⚠️ Emergency Response Analyzer not available: {e}")
     EMERGENCY_AVAILABLE = False
+
 class RouteAnalyzer:
     """Complete route analysis with API integration and data storage"""
     
     def __init__(self, api_tracker):
         self.api_tracker = api_tracker
         self.db_manager = api_tracker.db_manager
-        # ADD THESE LINES:
-        self.road_quality_analyzer = RoadQualityAnalyzer(api_tracker)
-        self.environmental_analyzer = EnvironmentalRiskAnalyzer(api_tracker)
-        try:
-            from .emergency_analyzer import EmergencyFacilitiesAnalyzer
-            self.emergency_analyzer = EmergencyFacilitiesAnalyzer(api_tracker, self.db_manager)
-            EMERGENCY_AVAILABLE = True
-            print("✅ Emergency Facilities Analyzer imported successfully")
-        except ImportError as e:
-            print(f"⚠️ Emergency Facilities Analyzer not available: {e}")
-            EMERGENCY_AVAILABLE = False
+        
+        # Initialize analyzers based on availability
+        if ROAD_QUALITY_AVAILABLE:
+            self.road_quality_analyzer = RoadQualityAnalyzer(api_tracker)
+            print("🛣️ Road Quality Analyzer initialized")
+        else:
+            self.road_quality_analyzer = None
+            print("⚠️ Road Quality Analyzer not available")
+            
+        if ENVIRONMENTAL_AVAILABLE:
+            self.environmental_analyzer = EnvironmentalRiskAnalyzer(api_tracker)
+            print("🌍 Environmental Risk Analyzer initialized")
+        else:
+            self.environmental_analyzer = None
+            print("⚠️ Environmental Risk Analyzer not available")
 
         if EMERGENCY_AVAILABLE:
             self.emergency_analyzer = EmergencyResponseAnalyzer(api_tracker)
@@ -71,6 +79,7 @@ class RouteAnalyzer:
         self.google_api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
         self.openweather_api_key = os.environ.get('OPENWEATHER_API_KEY')
         self.text_translator = TextTranslator(preferred_method='googletrans')
+        
         if self.google_api_key:
             self.gmaps = googlemaps.Client(key=self.google_api_key)
         else:
@@ -166,7 +175,7 @@ class RouteAnalyzer:
                 if environmental_data:
                     self.environmental_analyzer.store_environmental_data(route_id, environmental_data)
             
-            # Step 13: Emergency Response Analysis - NEW!
+            # Step 13: Emergency Response Analysis
             if self.emergency_analyzer:
                 print("🚨 Analyzing emergency preparedness...")
                 emergency_data = self.emergency_analyzer.analyze_emergency_preparedness(route_points, route_id)
@@ -717,6 +726,7 @@ class RouteAnalyzer:
         
         print(f"📡 Analyzed network coverage for {len(coverage_data)} points")
         return coverage_data
+    
     def _get_traffic_data(self, route_points: List[List[float]]) -> List[Dict]:
         """Get traffic data using Google Maps Traffic and Directions API"""
         if not self.gmaps:
@@ -837,6 +847,7 @@ class RouteAnalyzer:
                 str(e)
             )
             return []
+    
     def _store_traffic_data(self, route_id: str, traffic_data: List[Dict]):
         """Store traffic data in database"""
         if not traffic_data:
@@ -844,8 +855,6 @@ class RouteAnalyzer:
             return
         
         try:
-            # import sqlite3
-            
             with sqlite3.connect(self.db_manager.db_path) as conn:
                 cursor = conn.cursor()
                 
@@ -996,7 +1005,6 @@ class RouteAnalyzer:
             # Get traffic data
             traffic_data = []
             try:
-                import sqlite3
                 with sqlite3.connect(self.db_manager.db_path) as conn:
                     conn.row_factory = sqlite3.Row
                     cursor = conn.cursor()
