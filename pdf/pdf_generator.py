@@ -818,14 +818,14 @@ class PDFGenerator:
         for detail in details:
             pdf.set_xy(35, y_pos)
             pdf.cell(0, 8, detail, 0, 1, 'L')
-            y_pos += 9
+            y_pos += 5
         
         # Enhanced footer with technology highlights
-        pdf.set_xy(25, 285)
-        pdf.set_font('Helvetica', 'I', 9)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 4, 'This report contains comprehensive analysis with visual evidence, real-time API integration,', 0, 1, 'C')
-        pdf.cell(0, 4, 'and AI-powered insights for enhanced journey risk management', 0, 0, 'C')
+        # pdf.set_xy(25, 285)
+        # pdf.set_font('Helvetica', 'I', 9)
+        # pdf.set_text_color(100, 100, 100)
+        # pdf.cell(0, 4, 'This report contains comprehensive analysis with visual evidence, real-time API integration,', 0, 1, 'C')
+        # pdf.cell(0, 4, 'and AI-powered insights for enhanced journey risk management', 0, 0, 'C')
         
         # Technology badges at bottom
         pdf.set_xy(30, 276)
@@ -905,7 +905,7 @@ class PDFGenerator:
     def _add_safety_compliance_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict) -> None:
         """Add Key Safety Measures & Regulatory Compliance table with dynamic content and intelligent rest breaks calculation"""
         try:
-            pdf.ln(10)
+            
             
             # Safety compliance header
             pdf.set_font('Helvetica', 'B', 14)
@@ -1187,7 +1187,7 @@ class PDFGenerator:
     def _add_high_risk_zones_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict, route_id: str) -> None:
         """Add High-Risk Zones & Key Risk Points table with actual route data"""
         try:
-            pdf.ln(10)
+            
             
             # High-Risk Zones header
             pdf.set_font('Helvetica', 'B', 14)
@@ -2029,7 +2029,7 @@ class PDFGenerator:
             # Add line under header
             pdf.set_draw_color(0, 82, 163)
             pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
-            pdf.ln(10)
+            # pdf.ln(10)
             
         except Exception as e:
             print(f"Error adding page header: {e}")
@@ -2047,7 +2047,7 @@ class PDFGenerator:
     def _add_seasonal_conditions_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict, route_id: str) -> None:
         """Add Seasonal Road Conditions & Traffic Patterns table with dynamic route-based data"""
         try:
-            pdf.ln(10)
+            
             
             # Seasonal conditions header
             pdf.set_font('Helvetica', 'B', 14)
@@ -2443,7 +2443,7 @@ class PDFGenerator:
     def _add_environmental_considerations_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict, route_id: str) -> None:
         """Add Environmental & Local Considerations table with dynamic route-based data"""
         try:
-            pdf.ln(10)
+            
             
             # Environmental considerations header
             pdf.set_font('Helvetica', 'B', 14)
@@ -2940,7 +2940,7 @@ class PDFGenerator:
     def _add_environmental_guidelines_table(self, pdf: 'EnhancedRoutePDF') -> None:
         """Add static Environmental & Local Driving Guidelines table for Petroleum Tanker Drivers"""
         try:
-            pdf.ln(10)
+            
             
             # Environmental guidelines header
             pdf.set_font('Helvetica', 'B', 14)
