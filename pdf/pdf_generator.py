@@ -772,24 +772,19 @@ class PDFGenerator:
             pdf.cell(0, 6, 'Powered by Route Analytics Pro - AI Intelligence Platform', 0, 1, 'L')
         
         # Main title section - Moved down and improved layout
-        pdf.set_xy(20, 110)
+        pdf.set_xy(0, 110)
         pdf.set_font('Helvetica', 'B', 28)
         pdf.set_text_color(*self.primary_color)
-        pdf.cell(0, 15, 'COMPREHENSIVE JOURNEY RISK', 0, 1, 'C')
-        pdf.cell(0, 15, 'MANAGEMENT ANALYSIS REPORT', 0, 1, 'C')
+        pdf.cell(210, 15, 'COMPREHENSIVE JOURNEY RISK', 0, 1, 'C')
+        pdf.set_xy(0, 125)  # Manually move Y down for next line
+        pdf.cell(210, 15, 'MANAGEMENT ANALYSIS REPORT', 0, 0, 'C')
         
         pdf.set_font('Helvetica', '', 16)
         pdf.set_text_color(*self.secondary_color)
         pdf.set_xy(20, 150)
-        pdf.cell(0, 10, 'Enhanced with Artificial Intelligence & Multi-API Analysis', 0, 1, 'C')
+        # pdf.cell(0, 10, 'Enhanced with Artificial Intelligence & Multi-API Analysis', 0, 1, 'C')
         
-        # Route details box - Better positioned and styled
-        pdf.set_xy(25, 175)
-        pdf.set_fill_color(255, 255, 255)
-        pdf.set_draw_color(*self.primary_color)
-        pdf.set_line_width(2)
-        pdf.rect(25, 175, 160, 100, 'DF')
-        
+                
         # Add decorative border inside
         pdf.set_draw_color(*self.secondary_color)
         pdf.set_line_width(0.5)
@@ -820,25 +815,6 @@ class PDFGenerator:
             pdf.cell(0, 8, detail, 0, 1, 'L')
             y_pos += 9
         
-        # Enhanced footer with technology highlights
-        # pdf.set_xy(25, 285)
-        # pdf.set_font('Helvetica', 'I', 9)
-        # pdf.set_text_color(100, 100, 100)
-        # pdf.cell(0, 4, 'This report contains comprehensive analysis with visual evidence, real-time API integration,', 0, 1, 'C')
-        # pdf.cell(0, 4, 'and AI-powered insights for enhanced journey risk management', 0, 0, 'C')
-        
-        # Technology badges at bottom
-        pdf.set_xy(30, 276)
-        pdf.set_font('Helvetica', 'B', 8)
-        pdf.set_text_color(*self.info_color)
-        
-        tech_badges = ['ROAD QUALITY', 'ENVIRONMENTAL', 'TRAFFIC', 'AI ANALYSIS', 'VISUAL EVIDENCE']
-        badge_width = 30
-        x_start = 35
-        
-        for i, badge in enumerate(tech_badges):
-            pdf.set_xy(x_start + (i * badge_width), 276)
-            pdf.cell(badge_width - 2, 6, badge, 0, 0, 'C')
     def _add_overview_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
         """Generate enhanced route overview page with highways, terrain, and detailed map"""
         try:
