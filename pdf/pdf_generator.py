@@ -786,7 +786,7 @@ class PDFGenerator:
         
                 
         # Add decorative border inside
-        pdf.set_draw_color(*self.secondary_color)
+        pdf.set_draw_color(0,0,0)
         pdf.set_line_width(0.5)
         pdf.rect(30, 180, 150, 90, 'D')
         
@@ -886,8 +886,8 @@ class PDFGenerator:
             table_start_x = pdf.get_x()
             table_start_y = pdf.get_y()
             
-            pdf.set_draw_color(128, 128, 128)  # Red borders
-            pdf.set_line_width(1)
+            pdf.set_draw_color(0, 0, 0)  # Red borders
+            pdf.set_line_width(0.5)
             
             current_y = table_start_y
             
@@ -932,7 +932,7 @@ class PDFGenerator:
                     pdf.cell(col_widths[1] - 4, row_height - 4, value, 0, 0, 'L')
                 
                 # Internal vertical red line
-                pdf.set_draw_color(128, 128, 128)
+                pdf.set_draw_color(0, 0, 0)
                 pdf.line(table_start_x + col_widths[0], current_y, table_start_x + col_widths[0], current_y + row_height)
                 
                 # Horizontal red line under the row
@@ -1363,8 +1363,8 @@ class PDFGenerator:
             table_start_x = pdf.get_x()
             table_start_y = pdf.get_y()
             
-            pdf.set_draw_color(128, 128, 128)  # Red borders
-            pdf.set_line_width(1)
+            pdf.set_draw_color(0, 0, 0)  # Red borders
+            pdf.set_line_width(0.5)
             
             # Draw each row
             for i, row in enumerate(table_data):
@@ -1404,13 +1404,13 @@ class PDFGenerator:
                     
                     # Internal vertical red line (if not last column)
                     if j < len(row) - 1:
-                        pdf.set_draw_color(128, 128, 128)
+                        pdf.set_draw_color(0, 0, 0)
                         pdf.line(x_pos + col_widths[j], y_pos, x_pos + col_widths[j], y_pos + row_height)
                     
                     x_pos += col_widths[j]
                 
                 # Horizontal red line under the row
-                pdf.set_draw_color(128, 128, 128)
+                pdf.set_draw_color(0, 0, 0)
                 pdf.line(table_start_x, y_pos + row_height, table_start_x + table_width, y_pos + row_height)
             
             # Final outer border rectangle
@@ -1744,8 +1744,8 @@ class PDFGenerator:
             table_start_x = pdf.get_x()
             table_start_y = pdf.get_y()
 
-            pdf.set_draw_color(128, 128, 128)  # Red
-            pdf.set_line_width(1)
+            pdf.set_draw_color(0, 0, 0)  # Red
+            pdf.set_line_width(0.5)
 
             # Draw each row
             for i, row in enumerate(table_data):
@@ -1769,13 +1769,13 @@ class PDFGenerator:
 
                     # Internal vertical red line (if not last column)
                     if j < len(row) - 1:
-                        pdf.set_draw_color(128, 128, 128)
+                        pdf.set_draw_color(0, 0, 0)
                         pdf.line(x_pos + col_widths[j], y_pos, x_pos + col_widths[j], y_pos + row_height)
 
                     x_pos += col_widths[j]
 
                 # Horizontal red line under the row
-                pdf.set_draw_color(128, 128, 128)
+                pdf.set_draw_color(0, 0, 0)
                 pdf.line(table_start_x, y_pos + row_height, table_start_x + table_width, y_pos + row_height)
 
             # Final outer border rectangle
@@ -2020,7 +2020,7 @@ class PDFGenerator:
             y_pos = pdf.get_y()
             
             # Draw border
-            pdf.set_draw_color(200, 200, 200)
+            pdf.set_draw_color(0, 0, 0)
             pdf.rect(x_pos, y_pos, placeholder_width, placeholder_height)
             
             # Add text
@@ -2121,7 +2121,7 @@ class PDFGenerator:
             pdf.ln(5)
             
             # Add line under header
-            pdf.set_draw_color(0, 82, 163)
+            pdf.set_draw_color(0, 0, 0)
             pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
             # pdf.ln(10)
             
@@ -2195,8 +2195,8 @@ class PDFGenerator:
             table_start_x = pdf.get_x()
             table_start_y = pdf.get_y()
             
-            pdf.set_draw_color(128, 128, 128)  # Red borders
-            pdf.set_line_width(1)
+            pdf.set_draw_color(0, 0, 0)  # Red borders
+            pdf.set_line_width(0.5)
             
             # Draw each row
             for i, row in enumerate(table_data):
@@ -2240,13 +2240,13 @@ class PDFGenerator:
                     
                     # Internal vertical red line (if not last column)
                     if j < len(row) - 1:
-                        pdf.set_draw_color(128, 128, 128)
+                        pdf.set_draw_color(0, 0, 0)
                         pdf.line(x_pos + col_widths[j], y_pos, x_pos + col_widths[j], y_pos + row_height)
                     
                     x_pos += col_widths[j]
                 
                 # Horizontal red line under the row
-                pdf.set_draw_color(128, 128, 128)
+                pdf.set_draw_color(0, 0, 0)
                 pdf.line(table_start_x, y_pos + row_height, table_start_x + table_width, y_pos + row_height)
             
             # Final outer border rectangle
@@ -2594,8 +2594,8 @@ class PDFGenerator:
             table_start_x = pdf.get_x()
             table_start_y = pdf.get_y()
             
-            pdf.set_draw_color(128, 128, 128)  # Red borders
-            pdf.set_line_width(1)
+            pdf.set_draw_color(0, 0, 0)  # Red borders
+            pdf.set_line_width(0.5)
             
             # Draw each row
             for i, row in enumerate(table_data):
@@ -2637,13 +2637,13 @@ class PDFGenerator:
                     
                     # Internal vertical red line (if not last column)
                     if j < len(row) - 1:
-                        pdf.set_draw_color(128, 128, 128)
+                        pdf.set_draw_color(0, 0, 0)
                         pdf.line(x_pos + col_widths[j], y_pos, x_pos + col_widths[j], y_pos + row_height)
                     
                     x_pos += col_widths[j]
                 
                 # Horizontal red line under the row
-                pdf.set_draw_color(128, 128, 128)
+                pdf.set_draw_color(0, 0, 0)
                 pdf.line(table_start_x, y_pos + row_height, table_start_x + table_width, y_pos + row_height)
             
             # Final outer border rectangle
@@ -3158,7 +3158,7 @@ class PDFGenerator:
                     pdf.cell(col_widths[1] - 4, 4, line, 0, 0, 'L')
                 
                 # Draw cell borders
-                pdf.set_draw_color(200, 200, 200)
+                pdf.set_draw_color(0, 0, 0)
                 pdf.rect(x_start, y_pos, col_widths[0], actual_row_height)
                 pdf.rect(x_start + col_widths[0], y_pos, col_widths[1], actual_row_height)
                 
@@ -3986,7 +3986,7 @@ class PDFGenerator:
         pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 14)
         pdf.set_xy(15, pdf.get_y() + 3)
-        pdf.cell(180, 9, f'{icon} COMPLIANCE STATUS: {status} (Score: {score}/100)', 0, 1, 'C')
+        pdf.cell(180, 9, f'COMPLIANCE STATUS: {status} (Score: {score}/100)', 0, 1, 'C')
         
         # Vehicle and Route Information
         pdf.ln(10)
@@ -4408,7 +4408,7 @@ class PDFGenerator:
         pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 14)
         pdf.set_xy(15, pdf.get_y() + 3)
-        pdf.cell(180, 9, f'{icon} EMERGENCY PREPAREDNESS: {status} (Score: {score}/100)', 0, 1, 'C')
+        pdf.cell(180, 9, f'EMERGENCY PREPAREDNESS: {status} (Score: {score}/100)', 0, 1, 'C')
         
         # Emergency Services Availability
         pdf.ln(10)
@@ -5440,7 +5440,7 @@ class EnhancedRoutePDF(FPDF):
         self.set_y(-20)
         
         # Footer line
-        self.set_draw_color(*self.primary_color)
+        self.set_draw_color(0,0,0)
         self.set_line_width(0.5)
         self.line(10, self.get_y(), 200, self.get_y())
         
@@ -5482,9 +5482,9 @@ class EnhancedRoutePDF(FPDF):
         self.cell(180, 10, title, 0, 1, 'L')
         
         # Decorative line
-        self.set_draw_color(*color)
-        self.set_line_width(1)
-        self.line(10, self.get_y(), 200, self.get_y())
+        # self.set_draw_color(0,0,0)
+        # self.set_line_width(0.5)
+        # self.line(10, self.get_y(), 200, self.get_y())
         
         self.ln(8)
     
@@ -5521,10 +5521,10 @@ class EnhancedRoutePDF(FPDF):
     
     def create_table_header(self, headers: List[str], col_widths: List[int]):
         """Create enhanced table header with Unicode cleaning"""
-        self.set_font('Helvetica', 'B', 9)
-        self.set_fill_color(230, 230, 230)
+        self.set_font('Helvetica', 'B', 10)
+        self.set_fill_color(255, 255, 255)
         self.set_text_color(0, 0, 0)
-        self.set_draw_color(200, 200, 200)
+        self.set_draw_color(0, 0, 0)
         
         for i, (header, width) in enumerate(zip(headers, col_widths)):
             self.set_xy(10 + sum(col_widths[:i]), self.get_y())
@@ -5540,7 +5540,7 @@ class EnhancedRoutePDF(FPDF):
         self.set_font('Helvetica', '', 8)
         self.set_fill_color(255, 255, 255)
         self.set_text_color(0, 0, 0)
-        self.set_draw_color(220, 220, 220)
+        self.set_draw_color(0, 0, 0)
         
         y_pos = self.get_y()
         
