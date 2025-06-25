@@ -264,7 +264,44 @@ class RouteAnalysisApp:
                 return jsonify({'error': 'Not authenticated'}), 401
             
             return jsonify(self.route_api.get_enhanced_route_overview(route_id))
-    
+        # Add this route to your app.py file
+
+        @self.app.route('/report/<route_id>')
+        def view_route_report(route_id):
+            """Display comprehensive web report for a specific route"""
+            if 'logged_in' not in session:
+                return redirect(url_for('login'))
+            
+            # Verify route exists
+            route = self.db_manager.get_route(route_id)
+            if not route:
+                return render_template('error.html', 
+                                    error_message=f'Route {route_id} not found'), 404
+            
+            # Add current date for the template
+            import datetime
+            current_date = datetime.datetime.now().strftime('%B %d, %Y')
+            
+            return render_template('route_report.html', 
+                                route_id=route_id, 
+                                route=route, 
+                                current_date=current_date)
+
+        # Also add this route to get enhanced overview data
+        @self.app.route('/api/routes/<route_id>/enhanced-overview')
+        def route_enhanced_overview_api(route_id):
+            """Get enhanced route overview with highways and terrain"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            try:
+                if self.route_api:
+                    return jsonify(self.route_api.get_enhanced_route_overview(route_id))
+                else:
+                    # Fallback to basic overview
+                    return jsonify(self.route_api.get_route_overview(route_id))
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
     def run(self, debug=True, port=5000):
         """Run the Flask application"""
         print("\n🚀 Starting Fresh Route Analysis System...")

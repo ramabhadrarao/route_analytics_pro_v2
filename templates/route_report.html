@@ -1,0 +1,299 @@
+<!-- templates/route_report.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HPCL Journey Risk Management Report - {{ route.from_address or 'Route' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/report.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>Loading Route Analysis...</p>
+        </div>
+    </div>
+
+    <!-- Navigation Header -->
+    <nav class="report-nav">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <img src="{{ url_for('static', filename='images/Hindustan_Petroleum_Logo.svg.png') }}" alt="HPCL Logo" class="nav-logo">
+                <span class="nav-title">Journey Risk Management</span>
+            </div>
+            <div class="nav-actions">
+                <button class="btn-secondary" onclick="window.print()">
+                    <i class="fas fa-print"></i> Print Report
+                </button>
+                <button class="btn-primary" onclick="downloadPDF()">
+                    <i class="fas fa-download"></i> Download PDF
+                </button>
+                <button class="btn-outline" onclick="window.location.href='{{ url_for('dashboard') }}'">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h3>Report Sections</h3>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="#overview" class="active"><i class="fas fa-chart-line"></i> Route Overview</a></li>
+            <li><a href="#safety-compliance"><i class="fas fa-shield-alt"></i> Safety & Compliance</a></li>
+            <li><a href="#risk-zones"><i class="fas fa-exclamation-triangle"></i> High-Risk Zones</a></li>
+            <li><a href="#seasonal-conditions"><i class="fas fa-calendar-alt"></i> Seasonal Conditions</a></li>
+            <li><a href="#environmental"><i class="fas fa-leaf"></i> Environmental Impact</a></li>
+            <li><a href="#sharp-turns"><i class="fas fa-route"></i> Sharp Turns Analysis</a></li>
+            <li><a href="#points-of-interest"><i class="fas fa-map-marker-alt"></i> Points of Interest</a></li>
+            <li><a href="#network-coverage"><i class="fas fa-signal"></i> Network Coverage</a></li>
+            <li><a href="#weather-analysis"><i class="fas fa-cloud-sun"></i> Weather Analysis</a></li>
+            <li><a href="#emergency-planning"><i class="fas fa-first-aid"></i> Emergency Planning</a></li>
+            <li><a href="#route-map"><i class="fas fa-map"></i> Route Map</a></li>
+            <li><a href="#traffic-analysis"><i class="fas fa-traffic-light"></i> Traffic Analysis</a></li>
+            <li><a href="#elevation-terrain"><i class="fas fa-mountain"></i> Elevation & Terrain</a></li>
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+         <div id="alerts"></div>
+        <!-- Title Section -->
+        <section class="title-section">
+            <div class="title-container">
+                <div class="title-header">
+                    <h1>COMPREHENSIVE JOURNEY RISK MANAGEMENT ANALYSIS REPORT</h1>
+                    <p class="title-subtitle">Enhanced with Artificial Intelligence & Multi-API Analysis</p>
+                </div>
+                <div class="route-details-card" id="routeDetailsCard">
+                    <h3><i class="fas fa-route"></i> Route Analysis Details</h3>
+                    <div class="details-grid">
+                        <div class="detail-item">
+                            <strong>Route ID:</strong> {{ route_id[:12] }}...
+                        </div>
+                        <div class="detail-item">
+                            <strong>Origin:</strong> {{ route.from_address or 'Unknown Location' }}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Destination:</strong> {{ route.to_address or 'Unknown Location' }}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Total Distance:</strong> {{ route.distance or 'Unknown' }}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Estimated Duration:</strong> {{ route.duration or 'Unknown' }}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Analysis Date:</strong> {{ current_date }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Route Overview Section -->
+        <section id="overview" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-chart-line"></i> Comprehensive Route Overview & Statistics</h2>
+            </div>
+            <div class="overview-grid">
+                <div class="overview-card" id="routeInfoCard">
+                    <div class="loading-placeholder">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Loading route information...</p>
+                    </div>
+                </div>
+                <div class="overview-card" id="statisticsCard">
+                    <div class="loading-placeholder">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Loading statistics...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="status-indicators" id="statusIndicators">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading status indicators...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Safety & Compliance Section -->
+        <section id="safety-compliance" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-shield-alt"></i> Key Safety Measures & Regulatory Compliance</h2>
+            </div>
+            <div class="compliance-grid" id="complianceGrid">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading compliance data...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- High-Risk Zones Section -->
+        <section id="risk-zones" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-exclamation-triangle"></i> High-Risk Zones & Key Risk Points</h2>
+            </div>
+            <div class="risk-zones-container" id="riskZonesContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading risk zones...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Seasonal Conditions Section -->
+        <section id="seasonal-conditions" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-calendar-alt"></i> Seasonal Road Conditions & Traffic Patterns</h2>
+            </div>
+            <div class="seasonal-container" id="seasonalContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading seasonal conditions...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Environmental Section -->
+        <section id="environmental" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-leaf"></i> Environmental & Local Considerations</h2>
+            </div>
+            <div class="environmental-container" id="environmentalContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading environmental data...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sharp Turns Analysis Section -->
+        <section id="sharp-turns" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-route"></i> Sharp Turns Analysis with Visual Evidence</h2>
+            </div>
+            <div class="turns-container" id="turnsContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading turns analysis...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Points of Interest Section -->
+        <section id="points-of-interest" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-map-marker-alt"></i> Points of Interest Analysis</h2>
+            </div>
+            <div class="poi-container" id="poiContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading points of interest...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Network Coverage Section -->
+        <section id="network-coverage" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-signal"></i> Network Coverage Analysis</h2>
+            </div>
+            <div class="network-container" id="networkContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading network coverage...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Weather Analysis Section -->
+        <section id="weather-analysis" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-cloud-sun"></i> Weather Conditions Analysis</h2>
+            </div>
+            <div class="weather-container" id="weatherContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading weather analysis...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Emergency Planning Section -->
+        <section id="emergency-planning" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-first-aid"></i> Emergency Preparedness & Response Planning</h2>
+            </div>
+            <div class="emergency-container" id="emergencyContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading emergency planning...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Route Map Section -->
+        <section id="route-map" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-map"></i> Comprehensive Route Map</h2>
+            </div>
+            <div class="map-container" id="mapContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading route map...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Traffic Analysis Section -->
+        <section id="traffic-analysis" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-traffic-light"></i> Traffic Analysis</h2>
+            </div>
+            <div class="traffic-container" id="trafficContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading traffic analysis...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Elevation & Terrain Section -->
+        <section id="elevation-terrain" class="report-section">
+            <div class="section-header">
+                <h2><i class="fas fa-mountain"></i> Elevation & Terrain Analysis</h2>
+            </div>
+            <div class="elevation-container" id="elevationContainer">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading elevation data...</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/report.js') }}"></script>
+    <script>
+        // Initialize report when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            const routeId = '{{ route_id }}';
+            
+            if (routeId) {
+                initializeReport(routeId);
+            } else {
+                showError('No route ID provided');
+            }
+        });
+    </script>
+</body>
+</html>

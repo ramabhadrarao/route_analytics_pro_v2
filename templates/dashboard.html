@@ -253,6 +253,61 @@
             100% { transform: scale(1); }
         }
     </style>
+
+    <!-- Add these styles to your dashboard CSS -->
+<style>
+.route-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-primary {
+    background: linear-gradient(45deg, #dc3545, #c82333);
+    color: white;
+}
+
+.btn-success {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+}
+
+.btn-info {
+    background: linear-gradient(45deg, #17a2b8, #138496);
+    color: white;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+@media (max-width: 768px) {
+    .route-actions {
+        flex-direction: column;
+    }
+    
+    .btn {
+        justify-content: center;
+    }
+}
+</style>
+
 </head>
 <body>
     <!-- Navigation -->
@@ -372,14 +427,22 @@
                                             <i class="fas fa-calendar me-1"></i>{{ route.created_at[:16] }}
                                         </small>
                                     </div>
-                                    <div class="btn-group">
-                                        <button class="btn btn-sm btn-outline-primary" onclick="viewRoute('{{ route.id }}')">
-                                            <i class="fas fa-eye"></i> View
-                                        </button>
-                                        <button class="btn btn-sm btn-primary" onclick="generatePDF('{{ route.id }}')">
-                                            <i class="fas fa-file-pdf"></i> Enhanced PDF
-                                        </button>
-                                    </div>
+                                  <div class="route-actions">
+    <!-- Existing Enhanced PDF button -->
+    <button class="btn btn-primary" onclick="generatePDF('{{ route.id }}')">
+        <i class="fas fa-file-pdf"></i> Enhanced PDF
+    </button>
+    
+    <!-- NEW: View Web Report button -->
+    <a href="{{ url_for('view_route_report', route_id=route.id) }}" class="btn btn-success">
+        <i class="fas fa-chart-line"></i> View Report
+    </a>
+    
+    <!-- Existing View Details button -->
+    <button class="btn btn-info" onclick="viewRouteDetails('{{ route.id }}')">
+        <i class="fas fa-eye"></i> View Details
+    </button>
+</div>
                                 </div>
                             </div>
                             {% else %}
