@@ -315,7 +315,7 @@ class PDFGenerator:
                 pdf.create_table_row(row_data, col_widths)
             
             # Vehicle recommendations
-            pdf.ln(15)
+            pdf.add_page()
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(*self.warning_color)
             pdf.cell(0, 8, 'VEHICLE-SPECIFIC ROAD QUALITY RECOMMENDATIONS', 0, 1, 'L')
@@ -408,7 +408,7 @@ class PDFGenerator:
             
             # Show environmental risks
             if risks:
-                pdf.ln(15)
+                pdf.ln(5)
                 pdf.set_text_color(0, 0, 0)
                 pdf.set_font('Helvetica', 'B', 12)
                 pdf.set_text_color(*self.success_color)
@@ -430,7 +430,7 @@ class PDFGenerator:
                     pdf.create_table_row(row_data, col_widths)
             
             # Environmental compliance guidelines
-            pdf.ln(15)
+            pdf.ln(5)
             pdf.set_font('Helvetica', 'B', 12)
             pdf.set_text_color(*self.primary_color)
             pdf.cell(0, 8, 'ENVIRONMENTAL COMPLIANCE & BEST PRACTICES', 0, 1, 'L')
@@ -805,8 +805,8 @@ class PDFGenerator:
         pdf.set_text_color(60, 60, 60)
         
         details = [
-            f"Route ID: {route['id'][:12]}...",
-            f"Origin: {route.get('from_address', 'Unknown Location')[:42]}",
+            # f"Route ID: {route['id'][:12]}...",
+            f"Supply Location: {route.get('from_address', 'Unknown Location')[:42]}",
             f"Destination: {route.get('to_address', 'Unknown Location')[:42]}",
             f"Total Distance: {route.get('distance', 'Unknown')}",
             f"Estimated Duration: {route.get('duration', 'Unknown')}",
@@ -818,7 +818,7 @@ class PDFGenerator:
         for detail in details:
             pdf.set_xy(35, y_pos)
             pdf.cell(0, 8, detail, 0, 1, 'L')
-            y_pos += 5
+            y_pos += 9
         
         # Enhanced footer with technology highlights
         # pdf.set_xy(25, 285)
@@ -867,12 +867,10 @@ class PDFGenerator:
             
             # Table data with enhanced fields
             table_data = [
-                ['From Address', route_info.get('from_address', 'Not specified')],
-                ['To Address', route_info.get('to_address', 'Not specified')],
+                ['Supply Location', route_info.get('from_address', 'Not specified')],
+                ['Destination', route_info.get('to_address', 'Not specified')],
                 ['Distance', route_info.get('distance', 'Not calculated')],
                 ['Duration', route_info.get('duration', 'Not calculated')]
-                # ['Total GPS Points', str(statistics.get('total_points', 0))],
-                # ['Analysis Date', route_info.get('created_at', '')[:10] if route_info.get('created_at') else 'Unknown']
             ]
             
             # ADD HIGHWAY DATA
@@ -889,7 +887,8 @@ class PDFGenerator:
             else:
                 table_data.append(['Terrain', 'Terrain analysis not available'])
             
-            self._draw_enhanced_table(pdf, table_data)
+            # Use dynamic row height table for route information
+            self._draw_dynamic_route_info_table(pdf, table_data)
             
             pdf.ln(8)
             
@@ -902,6 +901,145 @@ class PDFGenerator:
         except Exception as e:
             print(f"Error generating enhanced route overview: {e}")
             self._add_error_message(pdf, "Failed to generate enhanced route overview")
+
+    def _draw_dynamic_route_info_table(self, pdf: 'EnhancedRoutePDF', table_data: List[List[str]]) -> None:
+        """Draw route information table with dynamic row heights based on text length"""
+        try:
+            col_widths = [80, 100]  # Label, Value
+            table_width = sum(col_widths)
+            table_start_x = pdf.get_x()
+            table_start_y = pdf.get_y()
+            
+            pdf.set_draw_color(128, 128, 128)  # Red borders
+            pdf.set_line_width(1)
+            
+            current_y = table_start_y
+            
+            # Draw each row with dynamic height
+            for i, row in enumerate(table_data):
+                label = str(row[0])
+                value = str(row[1])
+                
+                # Calculate required height for this row
+                row_height = self._calculate_row_height(pdf, value, col_widths[1])
+                
+                # Alternating row background
+                if i % 2 == 0:
+                    pdf.set_fill_color(255, 255, 255)  # White
+                else:
+                    pdf.set_fill_color(245, 245, 245)  # Light gray
+                
+                # Draw row background
+                pdf.rect(table_start_x, current_y, table_width, row_height, 'DF')
+                
+                # Draw label column (first column - bold)
+                pdf.set_text_color(0, 0, 0)
+                pdf.set_font('Helvetica', 'B', 10)
+                pdf.set_xy(table_start_x + 2, current_y + 2)
+                
+                # For long labels, wrap them too
+                if len(label) > 25:
+                    pdf.multi_cell(col_widths[0] - 4, 5, label, 0, 'L')
+                else:
+                    pdf.cell(col_widths[0] - 4, row_height - 4, label, 0, 0, 'L')
+                
+                # Draw value column (second column - normal)
+                pdf.set_font('Helvetica', '', 10)
+                pdf.set_xy(table_start_x + col_widths[0] + 2, current_y + 2)
+                
+                # Use multi_cell for long text with proper wrapping
+                if len(value) > 35:
+                    # Calculate how many lines we need
+                    lines_needed = len(value) // 35 + 1
+                    pdf.multi_cell(col_widths[1] - 4, 5, value, 0, 'L')
+                else:
+                    pdf.cell(col_widths[1] - 4, row_height - 4, value, 0, 0, 'L')
+                
+                # Internal vertical red line
+                pdf.set_draw_color(128, 128, 128)
+                pdf.line(table_start_x + col_widths[0], current_y, table_start_x + col_widths[0], current_y + row_height)
+                
+                # Horizontal red line under the row
+                pdf.line(table_start_x, current_y + row_height, table_start_x + table_width, current_y + row_height)
+                
+                # Move to next row
+                current_y += row_height
+            
+            # Final outer border rectangle
+            total_height = current_y - table_start_y
+            pdf.rect(table_start_x, table_start_y, table_width, total_height)
+            
+            # Move cursor below the table
+            pdf.set_y(current_y + 5)
+            
+        except Exception as e:
+            print(f"Error drawing dynamic route info table: {e}")
+
+    def _calculate_row_height(self, pdf: 'EnhancedRoutePDF', text: str, column_width: int) -> int:
+        """Calculate the required row height based on text length"""
+        try:
+            # Base height
+            base_height = 12
+            
+            # Characters per line (approximate)
+            chars_per_line = (column_width - 4) // 3  # Rough estimate: 3 pixels per character
+            
+            # Calculate number of lines needed
+            lines_needed = max(1, len(text) // chars_per_line + (1 if len(text) % chars_per_line > 0 else 0))
+            
+            # Calculate height: base height + extra height for additional lines
+            if lines_needed <= 1:
+                return base_height
+            elif lines_needed <= 2:
+                return base_height + 8
+            elif lines_needed <= 3:
+                return base_height + 16
+            else:
+                return base_height + 24  # Maximum height for very long text
+            
+        except Exception as e:
+            print(f"Error calculating row height: {e}")
+            return 12  # Default height
+
+    def _wrap_text_for_width(self, text: str, max_width: int) -> List[str]:
+        """Wrap text to fit within specified width (improved version)"""
+        try:
+            # Approximate characters per line based on width
+            chars_per_line = max(20, (max_width - 4) // 3)
+            
+            words = text.split()
+            lines = []
+            current_line = ""
+            
+            for word in words:
+                # Check if adding this word would exceed the line length
+                test_line = f"{current_line} {word}".strip()
+                
+                if len(test_line) <= chars_per_line:
+                    current_line = test_line
+                else:
+                    # If current line has content, save it and start new line
+                    if current_line:
+                        lines.append(current_line)
+                        current_line = word
+                    else:
+                        # Word is too long, break it
+                        if len(word) > chars_per_line:
+                            # Break long word
+                            lines.append(word[:chars_per_line])
+                            current_line = word[chars_per_line:]
+                        else:
+                            current_line = word
+            
+            # Add the last line
+            if current_line:
+                lines.append(current_line)
+            
+            return lines if lines else [text[:chars_per_line]]
+            
+        except Exception as e:
+            print(f"Error wrapping text: {e}")
+            return [text]
     def _add_safety_compliance_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict) -> None:
         """Add Key Safety Measures & Regulatory Compliance table with dynamic content and intelligent rest breaks calculation"""
         try:
@@ -1185,10 +1323,8 @@ class PDFGenerator:
             print(f"Error parsing distance: {e}")
             return 0
     def _add_high_risk_zones_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict, route_id: str) -> None:
-        """Add High-Risk Zones & Key Risk Points table with actual route data"""
+        """Add High-Risk Zones & Key Risk Points table with enhanced red-bordered styling"""
         try:
-            
-            
             # High-Risk Zones header
             pdf.set_font('Helvetica', 'B', 14)
             pdf.set_text_color(0, 82, 163)  # HPCL blue
@@ -1196,123 +1332,119 @@ class PDFGenerator:
             pdf.ln(2)
             
             # Get route data for risk analysis
-            route_info = enhanced_data.get('route_info', {})
             sharp_turns = enhanced_data.get('sharp_turns', [])
             route_points = enhanced_data.get('route_points', [])
+            route_info = enhanced_data.get('route_info', {})
             
-            # Get additional risk data from database
+            # Get risk zones data
             risk_zones = self._compile_high_risk_zones(route_id, sharp_turns, route_points, route_info)
             
             if not risk_zones:
                 pdf.set_font('Helvetica', 'I', 10)
-                pdf.set_text_color(120, 120, 120)
+                pdf.set_text_color(0, 0, 0)
                 pdf.cell(0, 6, 'No high-risk zones identified for this route.', 0, 1, 'L')
                 return
             
-            # Table headers
-            pdf.set_font('Helvetica', 'B', 9)
-            pdf.set_text_color(255, 255, 255)  # White text
-            pdf.set_fill_color(0, 82, 163)  # HPCL blue background
-            
-            # Define column widths for risk zones table
-            col_widths = [35, 20, 20, 25, 25, 25, 30]  # Adjusted for content
-            headers = ['Type', 'from Start', 'from End', 'Coordinates', 'Risk Level', 'Speed Limit', 'Driver Action']
-            
-            # Draw table header
-            x_start = pdf.get_x()
-            y_start = pdf.get_y()
-            
-            for i, header in enumerate(headers):
-                pdf.rect(x_start + sum(col_widths[:i]), y_start, col_widths[i], 8, 'F')
-                pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2)
-                
-                # Wrap header text if too long
-                if len(header) > 8:
-                    lines = self._wrap_text(header, col_widths[i] - 2)
-                    for j, line in enumerate(lines[:2]):  # Max 2 lines
-                        pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 1 + (j * 3))
-                        pdf.cell(col_widths[i] - 2, 3, line, 0, 0, 'C')
-                else:
-                    pdf.cell(col_widths[i] - 2, 4, header, 0, 0, 'C')
-            
-            pdf.set_xy(x_start, y_start + 8)
-            
-            # Draw table rows
-            row_height = 10
-            for i, zone in enumerate(risk_zones[:15]):  # Limit to 15 most critical zones
-                y_pos = pdf.get_y()
-                
-                # Alternate row colors
-                if i % 2 == 0:
-                    pdf.set_fill_color(248, 249, 250)  # Light gray
-                else:
-                    pdf.set_fill_color(255, 255, 255)  # White
-                
-                # Draw row background
-                pdf.rect(x_start, y_pos, sum(col_widths), row_height, 'F')
-                
-                # Set text color based on risk level
-                risk_level = zone.get('risk_level', 'Medium')
-                if risk_level == 'High' or risk_level == 'Critical':
-                    pdf.set_text_color(220, 53, 69)  # Red
-                elif risk_level == 'Medium':
-                    pdf.set_text_color(255, 193, 7)  # Orange
-                else:
-                    pdf.set_text_color(40, 167, 69)  # Green
-                
-                # Prepare row data
-                row_data = [
-                    zone.get('type', 'Unknown'),
-                    f"{zone.get('dist_from_start', 0):.1f} km",
-                    f"{zone.get('dist_from_end', 0):.1f} km",
-                    zone.get('coordinates', 'N/A'),
-                    zone.get('risk_level', 'Medium'),
-                    zone.get('speed_limit', 'Normal'),
-                    zone.get('driver_action', 'Exercise caution')
-                ]
-                
-                # Draw cells
-                for j, (data, width) in enumerate(zip(row_data, col_widths)):
-                    x_pos = x_start + sum(col_widths[:j])
-                    pdf.set_xy(x_pos + 1, y_pos + 2)
-                    
-                    pdf.set_font('Helvetica', '', 8)
-                    
-                    # Handle long text
-                    if len(str(data)) > 15:
-                        lines = self._wrap_text(str(data), width - 2)
-                        for k, line in enumerate(lines[:2]):  # Max 2 lines
-                            pdf.set_xy(x_pos + 1, y_pos + 1 + (k * 4))
-                            pdf.cell(width - 2, 4, line, 0, 0, 'L')
-                    else:
-                        pdf.cell(width - 2, 6, str(data), 0, 0, 'L')
-                
-                pdf.set_xy(x_start, y_pos + row_height)
+            # Enhanced table with red borders
+            self._draw_risk_zones_enhanced_table(pdf, risk_zones)
             
             # Add risk zones summary
             pdf.ln(5)
             pdf.set_font('Helvetica', 'B', 10)
-            pdf.set_text_color(0, 82, 163)
+            pdf.set_text_color(0, 0, 0)
             pdf.cell(0, 6, f'RISK SUMMARY: {len(risk_zones)} high-risk zones identified', 0, 1, 'L')
-            
-            # Risk level counts
-            risk_counts = {}
-            for zone in risk_zones:
-                level = zone.get('risk_level', 'Medium')
-                risk_counts[level] = risk_counts.get(level, 0) + 1
-            
-            pdf.set_font('Helvetica', '', 9)
-            pdf.set_text_color(100, 100, 100)
-            summary_parts = []
-            for level, count in risk_counts.items():
-                summary_parts.append(f"{level}: {count}")
-            
-            pdf.cell(0, 4, " | ".join(summary_parts), 0, 1, 'L')
             
             print(f"✅ Added high-risk zones table with {len(risk_zones)} zones")
             
         except Exception as e:
             print(f"❌ Error adding high-risk zones table: {e}")
+
+    def _draw_risk_zones_enhanced_table(self, pdf: 'EnhancedRoutePDF', zones_data: List[Dict]) -> None:
+        """Draw risk zones table with enhanced red-bordered visual styling"""
+        try:
+            # Column configuration for risk zones table
+            col_widths = [30, 25, 25, 35, 25, 25, 25]  # Type, Dist Start, Dist End, Coordinates, Risk, Speed, Action
+            headers = ['Type', 'From Start', 'From End', 'Coordinates', 'Risk Level', 'Speed Limit', 'Driver Action']
+            
+            # Prepare table data with headers
+            table_data = [headers]
+            
+            for zone in zones_data[:12]:  # Limit to 12 zones
+                row = [
+                    zone.get('type', 'Unknown')[:15],
+                    f"{zone.get('dist_from_start', 0):.1f} km",
+                    f"{zone.get('dist_from_end', 0):.1f} km",
+                    zone.get('coordinates', 'N/A')[:20],
+                    zone.get('risk_level', 'Medium'),
+                    zone.get('speed_limit', 'Normal')[:12],
+                    zone.get('driver_action', 'Exercise caution')[:15]
+                ]
+                table_data.append(row)
+            
+            # Enhanced table styling
+            row_height = 12
+            table_width = sum(col_widths)
+            table_start_x = pdf.get_x()
+            table_start_y = pdf.get_y()
+            
+            pdf.set_draw_color(128, 128, 128)  # Red borders
+            pdf.set_line_width(1)
+            
+            # Draw each row
+            for i, row in enumerate(table_data):
+                y_pos = table_start_y + i * row_height
+                
+                # Header row special styling
+                if i == 0:
+                    pdf.set_fill_color(173, 216, 230)   # HPCL blue header
+                    pdf.set_text_color(0, 0, 0)  # White text
+                    pdf.set_font('Helvetica', 'B', 10)
+                else:
+                    # Alternating row background
+                    if i % 2 == 1:
+                        pdf.set_fill_color(255, 255, 255)  # White
+                    else:
+                        pdf.set_fill_color(245, 245, 245)  # Light gray
+                    
+                    # Color coding based on risk level
+                    risk_level = zones_data[i-1].get('risk_level', 'Medium') if i <= len(zones_data) else 'Medium'
+                    if risk_level in ['Critical', 'High']:
+                        pdf.set_text_color(0, 0, 0)  # Red
+                    elif risk_level == 'Medium':
+                        pdf.set_text_color(0, 0, 0)  # Orange
+                    else:
+                        pdf.set_text_color(0, 0, 0)  # Green
+                    
+                    pdf.set_font('Helvetica', 'B', 7)
+                
+                # Draw row background
+                pdf.rect(table_start_x, y_pos, table_width, row_height, 'DF')
+                
+                # Draw columns and content
+                x_pos = table_start_x
+                for j, cell in enumerate(row):
+                    pdf.set_xy(x_pos + 1, y_pos + 2)
+                    pdf.multi_cell(col_widths[j] - 2, 4, str(cell), 0, 'L')
+                    
+                    # Internal vertical red line (if not last column)
+                    if j < len(row) - 1:
+                        pdf.set_draw_color(128, 128, 128)
+                        pdf.line(x_pos + col_widths[j], y_pos, x_pos + col_widths[j], y_pos + row_height)
+                    
+                    x_pos += col_widths[j]
+                
+                # Horizontal red line under the row
+                pdf.set_draw_color(128, 128, 128)
+                pdf.line(table_start_x, y_pos + row_height, table_start_x + table_width, y_pos + row_height)
+            
+            # Final outer border rectangle
+            pdf.rect(table_start_x, table_start_y, table_width, len(table_data) * row_height)
+            
+            # Move cursor below the table
+            pdf.set_y(table_start_y + len(table_data) * row_height + 5)
+            
+        except Exception as e:
+            print(f"Error drawing risk zones enhanced table: {e}")
 
     def _compile_high_risk_zones(self, route_id: str, sharp_turns: List[Dict], 
                                 route_points: List[Dict], route_info: Dict) -> List[Dict]:
@@ -1628,71 +1760,57 @@ class PDFGenerator:
         except Exception as e:
             return []
     def _draw_enhanced_table(self, pdf: 'EnhancedRoutePDF', table_data: List[List[str]]) -> None:
-        """Draw enhanced table with better formatting"""
+        """Draw enhanced table with exact red-bordered visual like SHARP TURNS ANALYSIS image"""
         try:
-            # Table settings
-            col_widths = [60, 120]  # Column widths
-            row_height = 8
-            
-            # Table border
+            col_widths = [100, 80]  # Adjusted column widths
+            row_height = 10
             table_width = sum(col_widths)
             table_start_x = pdf.get_x()
             table_start_y = pdf.get_y()
-            
-            # Draw table border
-            pdf.set_draw_color(0, 82, 163)  # HPCL blue
-            pdf.set_line_width(0.5)
-            pdf.rect(table_start_x, table_start_y, table_width, len(table_data) * row_height)
-            
-            # Draw rows
+
+            pdf.set_draw_color(128, 128, 128)  # Red
+            pdf.set_line_width(1)
+
+            # Draw each row
             for i, row in enumerate(table_data):
-                y_pos = table_start_y + (i * row_height)
-                
-                # Alternate row colors
+                y_pos = table_start_y + i * row_height
+
+                # Alternating row background
                 if i % 2 == 0:
-                    pdf.set_fill_color(248, 249, 250)  # Light gray
-                else:
                     pdf.set_fill_color(255, 255, 255)  # White
-                
-                # Draw row background
-                pdf.rect(table_start_x, y_pos, table_width, row_height, 'F')
-                
-                # Draw cell contents
+                else:
+                    pdf.set_fill_color(245, 245, 245)  # Light gray for alternate
+
+                pdf.rect(table_start_x, y_pos, table_width, row_height, 'DF')
+
+                # Draw columns and content
                 x_pos = table_start_x
-                for j, cell_content in enumerate(row):
-                    # Set font style
-                    if j == 0:  # First column (labels)
-                        pdf.set_font('Helvetica', 'B', 10)
-                        pdf.set_text_color(0, 82, 163)  # HPCL blue
-                    else:  # Second column (values)
-                        pdf.set_font('Helvetica', '', 10)
-                        pdf.set_text_color(0, 0, 0)  # Black
-                    
-                    # Position and add text
-                    pdf.set_xy(x_pos + 2, y_pos + 2)
-                    
-                    # Handle long text
-                    if len(cell_content) > 30:
-                        # Wrap long text
-                        lines = self._wrap_text(cell_content, col_widths[j] - 4)
-                        for line_num, line in enumerate(lines[:2]):  # Max 2 lines
-                            pdf.set_xy(x_pos + 2, y_pos + 2 + (line_num * 3))
-                            pdf.cell(col_widths[j] - 4, 3, line, 0, 0, 'L')
-                    else:
-                        pdf.cell(col_widths[j] - 4, 4, cell_content, 0, 0, 'L')
-                    
-                    x_pos += col_widths[j]
-                    
-                    # Draw column separator
+                for j, cell in enumerate(row):
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.set_font('Helvetica', 'B', 10)
+                    pdf.set_xy(x_pos + 2, y_pos + 3)
+                    pdf.multi_cell(col_widths[j] - 4, 5, str(cell), 0, 'L')
+
+                    # Internal vertical red line (if not last column)
                     if j < len(row) - 1:
-                        pdf.set_draw_color(200, 200, 200)
-                        pdf.line(x_pos, y_pos, x_pos, y_pos + row_height)
-            
-            # Move cursor below table
-            pdf.set_xy(table_start_x, table_start_y + (len(table_data) * row_height))
-            
+                        pdf.set_draw_color(128, 128, 128)
+                        pdf.line(x_pos + col_widths[j], y_pos, x_pos + col_widths[j], y_pos + row_height)
+
+                    x_pos += col_widths[j]
+
+                # Horizontal red line under the row
+                pdf.set_draw_color(128, 128, 128)
+                pdf.line(table_start_x, y_pos + row_height, table_start_x + table_width, y_pos + row_height)
+
+            # Final outer border rectangle
+            pdf.rect(table_start_x, table_start_y, table_width, len(table_data) * row_height)
+
+            # Move cursor below the table
+            pdf.set_y(table_start_y + len(table_data) * row_height + 5)
+
         except Exception as e:
             print(f"Error drawing enhanced table: {e}")
+
 
     def _add_statistics_section(self, pdf: 'EnhancedRoutePDF', statistics: Dict, highway_data: Dict, terrain_data: Dict) -> None:
         """Add comprehensive statistics section"""
@@ -2045,122 +2163,124 @@ class PDFGenerator:
             print(f"Error adding error message: {e}")
 
     def _add_seasonal_conditions_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict, route_id: str) -> None:
-        """Add Seasonal Road Conditions & Traffic Patterns table with dynamic route-based data"""
+        """Add Seasonal Road Conditions & Traffic Patterns table with enhanced red-bordered styling"""
         try:
-            
-            
             # Seasonal conditions header
             pdf.set_font('Helvetica', 'B', 14)
             pdf.set_text_color(0, 82, 163)  # HPCL blue
             pdf.cell(0, 8, 'SEASONAL ROAD CONDITIONS & TRAFFIC PATTERNS', 0, 1, 'L')
             pdf.ln(2)
             
-            # Get route data for seasonal analysis
-            highway_data = enhanced_data.get('highways', {})
-            terrain_data = enhanced_data.get('terrain', {})
-            route_info = enhanced_data.get('route_info', {})
-            
             # Compile seasonal conditions based on actual route
             seasonal_conditions = self._compile_seasonal_conditions(route_id, enhanced_data)
             
             if not seasonal_conditions:
                 pdf.set_font('Helvetica', 'I', 10)
-                pdf.set_text_color(120, 120, 120)
+                pdf.set_text_color(0, 0, 0)
                 pdf.cell(0, 6, 'Seasonal analysis pending - general precautions recommended.', 0, 1, 'L')
                 return
             
-            # Table headers
-            pdf.set_font('Helvetica', 'B', 9)
-            pdf.set_text_color(255, 255, 255)  # White text
-            pdf.set_fill_color(0, 82, 163)  # HPCL blue background
-            
-            # Define column widths for seasonal table
-            col_widths = [25, 50, 55, 60]  # Season, Critical Stretches, Challenges, Driver Caution
-            headers = ['Season / Condition', 'Critical Stretches / Coordinates / Roads', 'Typical Challenges', 'Driver Caution']
-            
-            # Draw table header
-            x_start = pdf.get_x()
-            y_start = pdf.get_y()
-            
-            for i, header in enumerate(headers):
-                pdf.rect(x_start + sum(col_widths[:i]), y_start, col_widths[i], 10, 'F')
-                pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2)
-                
-                # Wrap header text
-                lines = self._wrap_text(header, col_widths[i] - 2)
-                for j, line in enumerate(lines[:2]):  # Max 2 lines
-                    pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2 + (j * 3))
-                    pdf.cell(col_widths[i] - 2, 3, line, 0, 0, 'C')
-            
-            pdf.set_xy(x_start, y_start + 10)
-            
-            # Draw table rows
-            row_height = 12
-            for i, condition in enumerate(seasonal_conditions):
-                y_pos = pdf.get_y()
-                
-                # Alternate row colors
-                if i % 2 == 0:
-                    pdf.set_fill_color(248, 249, 250)  # Light gray
-                else:
-                    pdf.set_fill_color(255, 255, 255)  # White
-                
-                # Draw row background
-                pdf.rect(x_start, y_pos, sum(col_widths), row_height, 'F')
-                
-                # Set text color based on season
-                season = condition.get('season', '').lower()
-                if 'summer' in season:
-                    pdf.set_text_color(255, 87, 34)  # Orange
-                elif 'monsoon' in season:
-                    pdf.set_text_color(33, 150, 243)  # Blue
-                elif 'winter' in season:
-                    pdf.set_text_color(96, 125, 139)  # Blue-gray
-                elif 'congestion' in season:
-                    pdf.set_text_color(244, 67, 54)  # Red
-                else:
-                    pdf.set_text_color(76, 175, 80)  # Green
-                
-                # Prepare row data
-                row_data = [
-                    condition.get('season', 'General'),
-                    condition.get('critical_stretches', 'Route sections'),
-                    condition.get('typical_challenges', 'Standard precautions'),
-                    condition.get('driver_caution', 'Exercise caution')
-                ]
-                
-                # Draw cells with text wrapping
-                for j, (data, width) in enumerate(zip(row_data, col_widths)):
-                    x_pos = x_start + sum(col_widths[:j])
-                    pdf.set_xy(x_pos + 1, y_pos + 1)
-                    
-                    pdf.set_font('Helvetica', '', 8)
-                    
-                    # Wrap text to fit in cell
-                    lines = self._wrap_text(str(data), width - 2)
-                    for k, line in enumerate(lines[:3]):  # Max 3 lines per cell
-                        pdf.set_xy(x_pos + 1, y_pos + 1 + (k * 3.5))
-                        pdf.cell(width - 2, 3.5, line, 0, 0, 'L')
-                
-                pdf.set_xy(x_start, y_pos + row_height)
+            # Enhanced table with red borders
+            self._draw_seasonal_enhanced_table(pdf, seasonal_conditions)
             
             # Add seasonal summary
             pdf.ln(5)
             pdf.set_font('Helvetica', 'B', 10)
-            pdf.set_text_color(0, 82, 163)
+            pdf.set_text_color(0, 0, 0)
             pdf.cell(0, 6, f'SEASONAL ANALYSIS: {len(seasonal_conditions)} conditions identified for route', 0, 1, 'L')
-            
-            # Current season recommendation
-            current_season = self._get_current_season()
-            pdf.set_font('Helvetica', 'I', 9)
-            pdf.set_text_color(120, 120, 120)
-            season_note = f"Current season: {current_season}. Review relevant conditions above before departure."
-            pdf.cell(0, 4, season_note, 0, 1, 'L')
             
             print(f"✅ Added seasonal conditions table with {len(seasonal_conditions)} conditions")
             
         except Exception as e:
             print(f"❌ Error adding seasonal conditions table: {e}")
+
+    def _draw_seasonal_enhanced_table(self, pdf: 'EnhancedRoutePDF', conditions_data: List[Dict]) -> None:
+        """Draw seasonal conditions table with enhanced red-bordered visual styling"""
+        try:
+            # Column configuration for seasonal table
+            col_widths = [35, 45, 55, 55]  # Season, Critical Stretches, Challenges, Driver Caution
+            headers = ['Season/Condition', 'Critical Stretches', 'Typical Challenges', 'Driver Caution']
+            
+            # Prepare table data with headers
+            table_data = [headers]
+            
+            for condition in conditions_data[:10]:  # Limit to 10 conditions
+                row = [
+                    condition.get('season', 'General')[:20],
+                    condition.get('critical_stretches', 'Route sections')[:25],
+                    condition.get('typical_challenges', 'Standard precautions')[:30],
+                    condition.get('driver_caution', 'Exercise caution')[:30]
+                ]
+                table_data.append(row)
+            
+            # Enhanced table styling
+            row_height = 14
+            table_width = sum(col_widths)
+            table_start_x = pdf.get_x()
+            table_start_y = pdf.get_y()
+            
+            pdf.set_draw_color(128, 128, 128)  # Red borders
+            pdf.set_line_width(1)
+            
+            # Draw each row
+            for i, row in enumerate(table_data):
+                y_pos = table_start_y + i * row_height
+                
+                # Header row special styling
+                if i == 0:
+                    pdf.set_fill_color(173, 216, 230)   # HPCL blue header
+                    pdf.set_text_color(0, 0, 0)  # White text
+                    pdf.set_font('Helvetica', 'B', 10)
+                else:
+                    # Alternating row background
+                    if i % 2 == 1:
+                        pdf.set_fill_color(255, 255, 255)  # White
+                    else:
+                        pdf.set_fill_color(245, 245, 245)  # Light gray
+                    
+                    # Color coding based on season
+                    season = conditions_data[i-1].get('season', '').lower() if i <= len(conditions_data) else ''
+                    if 'summer' in season:
+                        pdf.set_text_color(0, 0, 0)  # Orange
+                    elif 'monsoon' in season:
+                        pdf.set_text_color(0, 0, 0)  # Blue
+                    elif 'winter' in season:
+                        pdf.set_text_color(0, 0, 0)  # Blue-gray
+                    elif 'congestion' in season:
+                        pdf.set_text_color(0, 0, 0)  # Red
+                    else:
+                        pdf.set_text_color(0, 0, 0)  # Black
+                    
+                    pdf.set_font('Helvetica', 'B', 8)
+                
+                # Draw row background
+                pdf.rect(table_start_x, y_pos, table_width, row_height, 'DF')
+                
+                # Draw columns and content
+                x_pos = table_start_x
+                for j, cell in enumerate(row):
+                    pdf.set_xy(x_pos + 2, y_pos + 2)
+                    pdf.multi_cell(col_widths[j] - 4, 4, str(cell), 0, 'L')
+                    
+                    # Internal vertical red line (if not last column)
+                    if j < len(row) - 1:
+                        pdf.set_draw_color(128, 128, 128)
+                        pdf.line(x_pos + col_widths[j], y_pos, x_pos + col_widths[j], y_pos + row_height)
+                    
+                    x_pos += col_widths[j]
+                
+                # Horizontal red line under the row
+                pdf.set_draw_color(128, 128, 128)
+                pdf.line(table_start_x, y_pos + row_height, table_start_x + table_width, y_pos + row_height)
+            
+            # Final outer border rectangle
+            pdf.rect(table_start_x, table_start_y, table_width, len(table_data) * row_height)
+            
+            # Move cursor below the table
+            pdf.set_y(table_start_y + len(table_data) * row_height + 5)
+            
+        except Exception as e:
+            print(f"Error drawing seasonal enhanced table: {e}")
 
     def _compile_seasonal_conditions(self, route_id: str, enhanced_data: Dict) -> List[Dict]:
         """Compile seasonal conditions based on actual route data"""
@@ -2441,10 +2561,8 @@ class PDFGenerator:
         else:
             return "Post-Monsoon"
     def _add_environmental_considerations_table(self, pdf: 'EnhancedRoutePDF', enhanced_data: Dict, route_id: str) -> None:
-        """Add Environmental & Local Considerations table with dynamic route-based data"""
+        """Add Environmental & Local Considerations table with enhanced red-bordered styling"""
         try:
-            
-            
             # Environmental considerations header
             pdf.set_font('Helvetica', 'B', 14)
             pdf.set_text_color(0, 82, 163)  # HPCL blue
@@ -2456,112 +2574,110 @@ class PDFGenerator:
             
             if not environmental_zones:
                 pdf.set_font('Helvetica', 'I', 10)
-                pdf.set_text_color(120, 120, 120)
+                pdf.set_text_color(0, 0, 0)
                 pdf.cell(0, 6, 'No specific environmental considerations identified for this route.', 0, 1, 'L')
                 return
             
-            # Table headers
-            pdf.set_font('Helvetica', 'B', 8)
-            pdf.set_text_color(255, 255, 255)  # White text
-            pdf.set_fill_color(0, 82, 163)  # HPCL blue background
-            
-            # Define column widths for environmental table
-            col_widths = [30, 45, 25, 35, 55]  # Zone, Location, Coordinates, Located On/Near, Environmental Risk
-            headers = ['Zone / Area', 'Location / Stretch', 'Coordinates', 'Located On / Near', 'Environmental / Local Risk']
-            
-            # Draw table header
-            x_start = pdf.get_x()
-            y_start = pdf.get_y()
-            
-            for i, header in enumerate(headers):
-                pdf.rect(x_start + sum(col_widths[:i]), y_start, col_widths[i], 10, 'F')
-                pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2)
-                
-                # Wrap header text
-                lines = self._wrap_text(header, col_widths[i] - 2)
-                for j, line in enumerate(lines[:2]):  # Max 2 lines
-                    pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 2 + (j * 3))
-                    pdf.cell(col_widths[i] - 2, 3, line, 0, 0, 'C')
-            
-            pdf.set_xy(x_start, y_start + 10)
-            
-            # Draw table rows
-            row_height = 14
-            for i, zone in enumerate(environmental_zones):
-                y_pos = pdf.get_y()
-                
-                # Alternate row colors
-                if i % 2 == 0:
-                    pdf.set_fill_color(248, 249, 250)  # Light gray
-                else:
-                    pdf.set_fill_color(255, 255, 255)  # White
-                
-                # Draw row background
-                pdf.rect(x_start, y_pos, sum(col_widths), row_height, 'F')
-                
-                # Set text color based on zone type
-                zone_type = zone.get('zone_type', '').lower()
-                if 'eco-sensitive' in zone_type or 'wildlife' in zone_type:
-                    pdf.set_text_color(76, 175, 80)  # Green
-                elif 'waterbody' in zone_type or 'river' in zone_type:
-                    pdf.set_text_color(33, 150, 243)  # Blue
-                elif 'school' in zone_type or 'children' in zone_type:
-                    pdf.set_text_color(255, 152, 0)  # Orange
-                elif 'market' in zone_type or 'festival' in zone_type:
-                    pdf.set_text_color(156, 39, 176)  # Purple
-                elif 'dense population' in zone_type or 'urban' in zone_type:
-                    pdf.set_text_color(244, 67, 54)  # Red
-                else:
-                    pdf.set_text_color(96, 125, 139)  # Blue-gray
-                
-                # Prepare row data
-                row_data = [
-                    zone.get('zone_type', 'Environmental Zone'),
-                    zone.get('location_stretch', 'Route section'),
-                    zone.get('coordinates', 'N/A'),
-                    zone.get('located_on_near', 'Along route'),
-                    zone.get('environmental_risk', 'Standard precautions required')
-                ]
-                
-                # Draw cells with text wrapping
-                for j, (data, width) in enumerate(zip(row_data, col_widths)):
-                    x_pos = x_start + sum(col_widths[:j])
-                    pdf.set_xy(x_pos + 1, y_pos + 1)
-                    
-                    pdf.set_font('Helvetica', '', 7)
-                    
-                    # Wrap text to fit in cell
-                    lines = self._wrap_text(str(data), width - 2)
-                    for k, line in enumerate(lines[:4]):  # Max 4 lines per cell
-                        pdf.set_xy(x_pos + 1, y_pos + 1 + (k * 3))
-                        pdf.cell(width - 2, 3, line, 0, 0, 'L')
-                
-                pdf.set_xy(x_start, y_pos + row_height)
+            # Enhanced table with red borders
+            self._draw_environmental_enhanced_table(pdf, environmental_zones)
             
             # Add environmental summary
             pdf.ln(5)
             pdf.set_font('Helvetica', 'B', 10)
-            pdf.set_text_color(0, 82, 163)
+            pdf.set_text_color(0, 0, 0)
             pdf.cell(0, 6, f'ENVIRONMENTAL SUMMARY: {len(environmental_zones)} zones requiring special attention', 0, 1, 'L')
-            
-            # Zone type counts
-            zone_counts = {}
-            for zone in environmental_zones:
-                zone_type = zone.get('zone_type', 'Other')
-                zone_counts[zone_type] = zone_counts.get(zone_type, 0) + 1
-            
-            pdf.set_font('Helvetica', '', 9)
-            pdf.set_text_color(100, 100, 100)
-            summary_parts = []
-            for zone_type, count in zone_counts.items():
-                summary_parts.append(f"{zone_type}: {count}")
-            
-            pdf.cell(0, 4, " | ".join(summary_parts), 0, 1, 'L')
             
             print(f"✅ Added environmental considerations table with {len(environmental_zones)} zones")
             
         except Exception as e:
             print(f"❌ Error adding environmental considerations table: {e}")
+
+    def _draw_environmental_enhanced_table(self, pdf: 'EnhancedRoutePDF', zones_data: List[Dict]) -> None:
+        """Draw environmental table with enhanced red-bordered visual styling"""
+        try:
+            # Column configuration for environmental table
+            col_widths = [40, 35, 30, 35, 50]  # Zone, Location, Coordinates, Located On, Risk
+            headers = ['Zone / Area', 'Location', 'Coordinates', 'Located On/Near', 'Environmental Risk']
+            
+            # Prepare table data with headers
+            table_data = [headers]
+            
+            for zone in zones_data[:12]:  # Limit to 12 zones
+                row = [
+                    zone.get('zone_type', 'Environmental Zone')[:20],
+                    zone.get('location_stretch', 'Route section')[:18],
+                    zone.get('coordinates', 'N/A')[:15],
+                    zone.get('located_on_near', 'Along route')[:18],
+                    zone.get('environmental_risk', 'Standard precautions')[:25]
+                ]
+                table_data.append(row)
+            
+            # Enhanced table styling
+            row_height = 12
+            table_width = sum(col_widths)
+            table_start_x = pdf.get_x()
+            table_start_y = pdf.get_y()
+            
+            pdf.set_draw_color(128, 128, 128)  # Red borders
+            pdf.set_line_width(1)
+            
+            # Draw each row
+            for i, row in enumerate(table_data):
+                y_pos = table_start_y + i * row_height
+                
+                # Header row special styling
+                if i == 0:
+                    pdf.set_fill_color(173, 216, 230)   # HPCL blue header
+                    pdf.set_text_color(0, 0, 0)  # White text
+                    pdf.set_font('Helvetica', 'B', 10)
+                else:
+                    # Alternating row background
+                    if i % 2 == 1:
+                        pdf.set_fill_color(255, 255, 255)  # White
+                    else:
+                        pdf.set_fill_color(245, 245, 245)  # Light gray
+                    
+                    # Color coding based on zone type
+                    zone_type = zones_data[i-1].get('zone_type', '').lower() if i <= len(zones_data) else ''
+                    if 'eco-sensitive' in zone_type:
+                        pdf.set_text_color(0, 0, 0)  # Green
+                    elif 'school' in zone_type:
+                        pdf.set_text_color(0, 0, 0)  # Orange
+                    elif 'market' in zone_type:
+                        pdf.set_text_color(0, 0, 0)  # Purple
+                    else:
+                        pdf.set_text_color(0, 0, 0)  # Black
+                    
+                    pdf.set_font('Helvetica', 'B', 8)
+                
+                # Draw row background
+                pdf.rect(table_start_x, y_pos, table_width, row_height, 'DF')
+                
+                # Draw columns and content
+                x_pos = table_start_x
+                for j, cell in enumerate(row):
+                    pdf.set_xy(x_pos + 2, y_pos + 2)
+                    pdf.multi_cell(col_widths[j] - 4, 4, str(cell), 0, 'L')
+                    
+                    # Internal vertical red line (if not last column)
+                    if j < len(row) - 1:
+                        pdf.set_draw_color(128, 128, 128)
+                        pdf.line(x_pos + col_widths[j], y_pos, x_pos + col_widths[j], y_pos + row_height)
+                    
+                    x_pos += col_widths[j]
+                
+                # Horizontal red line under the row
+                pdf.set_draw_color(128, 128, 128)
+                pdf.line(table_start_x, y_pos + row_height, table_start_x + table_width, y_pos + row_height)
+            
+            # Final outer border rectangle
+            pdf.rect(table_start_x, table_start_y, table_width, len(table_data) * row_height)
+            
+            # Move cursor below the table
+            pdf.set_y(table_start_y + len(table_data) * row_height + 5)
+            
+        except Exception as e:
+            print(f"Error drawing environmental enhanced table: {e}")
 
     def _compile_environmental_considerations(self, route_id: str, enhanced_data: Dict) -> List[Dict]:
         """Compile environmental and local considerations from various data sources"""
@@ -2971,7 +3087,7 @@ class PDFGenerator:
     def _add_defensive_driving_guidelines_table(self, pdf: 'EnhancedRoutePDF') -> None:
         """Add static Defensive Driving & Driver Well-being guidelines table"""
         try:
-            pdf.ln(12)
+            pdf.ln(5)
             
             # Defensive driving header
             pdf.set_font('Helvetica', 'B', 14)
@@ -3198,7 +3314,7 @@ class PDFGenerator:
             pdf.set_xy(15, pdf.get_y() + 2)
             turn_header = f'CRITICAL TURN #{i}: {turn["angle"]:.1f} deg - {turn["classification"]} - {turn["danger_level"]} RISK'
             pdf.cell(180, 8, turn_header, 0, 1, 'L')
-            
+            pdf.ln(10)
             # Detailed turn analysis
             pdf.set_text_color(0, 0, 0)
             pdf.set_font('Helvetica', '', 10)
@@ -5341,7 +5457,7 @@ class EnhancedRoutePDF(FPDF):
         self.set_font('Helvetica', '', 8)
         self.cell(0, 5, datetime.datetime.now().strftime('%B %d, %Y'), 0, 0, 'R')
         
-        self.ln(30)
+        self.ln(10)
     
     def footer(self):
         """Enhanced page footer"""
