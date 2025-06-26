@@ -3459,9 +3459,11 @@ class PDFGenerator:
             pdf.set_font('Helvetica', 'I', 9)
             pdf.set_text_color(150, 150, 150)
             pdf.cell(0, 6, f'   Image files not accessible from file system', 0, 1, 'L')
-    
-    def _add_pois_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
-        """Add comprehensive Points of Interest analysis"""
+    # Enhanced POI table methods for pdf_generator.py
+    # Add these methods to your PDFGenerator class
+
+    def _add_enhanced_pois_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
+        """Add comprehensive Points of Interest analysis with full multi-line tables"""
         from api.route_api import RouteAPI
         route_api = RouteAPI(self.db_manager, None)
         pois_data = route_api.get_points_of_interest(route_id)
@@ -3474,134 +3476,587 @@ class PDFGenerator:
             return
         
         pdf.add_page()
-        pdf.add_section_header("COMPREHENSIVE POINTS OF INTEREST ANALYSIS", "info")
+        pdf.add_section_header("COMPREHENSIVE POINTS OF INTEREST - FULL DETAILS", "info")
+        
+        # Get route information for distance calculations
+        route_points = self.db_manager.get_route_points(route_id)
         
         # POI Statistics
         stats = pois_data['statistics']
-        
-        # Summary statistics
         summary_table = [
             ['Total POIs Identified', f"{stats['total_pois']:,}"],
             ['Emergency Services', f"{stats['emergency_services']:,}"],
             ['Essential Services', f"{stats['essential_services']:,}"],
             ['Other Services', f"{stats['other_services']:,}"],
-            ['Coverage Score', f"{stats['coverage_score']}/100"],
-            ['Service Availability Rating', 'EXCELLENT' if stats['coverage_score'] > 80 else 'GOOD' if stats['coverage_score'] > 60 else 'MODERATE' if stats['coverage_score'] > 40 else 'LIMITED']
+            ['Coverage Score', f"{stats['coverage_score']}/100"]
         ]
         
         pdf.create_detailed_table(summary_table, [70, 110])
         
-        # Service availability assessment
-        pdf.ln(10)
-        coverage_score = stats['coverage_score']
-        if coverage_score >= 80:
-            color = self.success_color
-            status = "EXCELLENT SERVICE COVERAGE"
-        elif coverage_score >= 60:
-            color = self.info_color
-            status = "GOOD SERVICE COVERAGE"
-        elif coverage_score >= 40:
-            color = self.warning_color
-            status = "MODERATE SERVICE COVERAGE"
-        else:
-            color = self.danger_color
-            status = "LIMITED SERVICE COVERAGE"
-        
-        pdf.set_fill_color(*color)
-        pdf.rect(10, pdf.get_y(), 190, 12, 'F')
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.set_xy(15, pdf.get_y() + 2)
-        pdf.cell(180, 8, f'SERVICE AVAILABILITY: {status} ({coverage_score}/100)', 0, 1, 'C')
-        
-        # Detailed POI Categories
+        # Enhanced POI Categories with full multi-line tables
         pois = pois_data['pois_by_type']
         
         poi_categories = [
-            ('hospitals', 'MEDICAL FACILITIES - Emergency Healthcare Services', self.danger_color, 'CRITICAL'),
-            ('police', 'LAW ENFORCEMENT - Security & Emergency Response', self.primary_color, 'CRITICAL'),
-            ('fire_stations', 'FIRE & RESCUE - Emergency Response Services', self.danger_color, 'CRITICAL'),
-            ('gas_stations', 'FUEL STATIONS - Vehicle Refueling Points', self.warning_color, 'ESSENTIAL'),
-            ('schools', 'EDUCATIONAL INSTITUTIONS - Speed Limit Zones (40 km/h)', self.success_color, 'AWARENESS'),
-            ('restaurants', 'FOOD & REST - Meal Stops & Driver Rest Areas', self.info_color, 'CONVENIENCE')
+            ('hospitals', 'MEDICAL FACILITIES - Emergency Healthcare Services', self.danger_color),
+            ('police', 'LAW ENFORCEMENT - Security & Emergency Response', self.primary_color),
+            ('fire_stations', 'FIRE & RESCUE - Emergency Response Services', self.danger_color),
+            ('gas_stations', 'FUEL STATIONS - Vehicle Refueling Points', self.warning_color),
+            ('schools', 'EDUCATIONAL INSTITUTIONS - Speed Limit Zones (40 km/h)', self.success_color),
+            ('restaurants', 'FOOD & REST - Meal Stops & Driver Rest Areas', self.info_color)
         ]
         
-        for poi_type, title, color, priority in poi_categories:
+        for poi_type, title, color in poi_categories:
             poi_list = pois.get(poi_type, [])
-            pdf.add_page()  # <-- ADD THIS LINE
-            # pdf.ln(15)
-            pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(*color)
-            pdf.cell(0, 8, f'{title} ({len(poi_list)} found) - {priority}', 0, 1, 'L')
             
             if not poi_list:
-                pdf.set_font('Helvetica', 'I', 10)
-                pdf.set_text_color(150, 150, 150)
-                pdf.cell(0, 6, f'   No {poi_type.replace("_", " ")} found along this route', 0, 1, 'L')
                 continue
             
-            # Create detailed table for this POI type
-            headers = ['#', 'Facility Name', 'Location/Address', 'Distance', 'Notes']
-            col_widths = [15, 55, 65, 25, 25]
-            
-            pdf.create_table_header(headers, col_widths)
-            
-            for i, poi in enumerate(poi_list, 1):  # Limit to 15 per type
-                notes = ""
-                if poi_type == 'schools':
-                    notes = "40 km/h"
-                elif poi_type == 'hospitals':
-                    notes = "Emergency"
-                elif poi_type == 'gas_stations':
-                    notes = "Fuel"
-                
-                row_data = [
-                    str(i),
-                    poi.get('name', 'Unknown'),
-                    poi.get('address', 'Unknown location'),
-                    "Along route",
-                    notes
-                ]
-                
-                pdf.create_table_row(row_data, col_widths)
-        
-        # Service recommendations
-        recommendations = pois_data.get('recommendations', [])
-        if recommendations:
-            pdf.ln(15)
+            pdf.add_page()
             pdf.set_font('Helvetica', 'B', 12)
-            pdf.set_text_color(*self.primary_color)
-            pdf.cell(0, 8, 'SERVICE AVAILABILITY RECOMMENDATIONS', 0, 1, 'L')
+            pdf.set_text_color(*color)
+            pdf.cell(0, 8, f'{title} ({len(poi_list)} found)', 0, 1, 'L')
+            pdf.ln(5)
             
-            pdf.set_font('Helvetica', '', 10)
-            pdf.set_text_color(0, 0, 0)
-            for i, rec in enumerate(recommendations, 1):
-                pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
-                pdf.multi_cell(172, 6, rec, 0, 'L')
-                pdf.ln(2)
+            # Use enhanced multi-line table
+            self._create_enhanced_poi_table(pdf, poi_list, route_points, poi_type)
+            
+            # Add summary note
+            pdf.ln(5)
+            pdf.set_font('Helvetica', 'I', 9)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(0, 5, f'NOTE: Click on map links in digital PDF to open live navigation. All {len(poi_list)} facilities shown with complete information.', 0, 1, 'L')
+
+    def _create_enhanced_poi_table(self, pdf: 'EnhancedRoutePDF', poi_list: list, 
+                              route_points: list, poi_type: str):
+        """Create enhanced POI table with multi-line cells and clickable map links"""
         
-        # Critical service gaps analysis
-        pdf.ln(10)
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.set_text_color(*self.danger_color)
-        pdf.cell(0, 8, 'CRITICAL SERVICE GAPS IDENTIFIED', 0, 1, 'L')
+        # Full comprehensive headers
+        headers = [
+            'Facility Name', 
+            'Full Address', 
+            'Dist from Start', 
+            'Dist from End', 
+            'GPS Coordinates', 
+            'Phone Number',
+            'Live Map Link'
+        ]
         
-        gaps = []
-        if len(pois.get('hospitals', [])) == 0:
-            gaps.append("* No medical facilities - Carry first aid kit and emergency contact numbers")
-        if len(pois.get('gas_stations', [])) < 2:
-            gaps.append("* Limited fuel stations - Plan refueling stops and carry extra fuel if possible")
-        if len(pois.get('police', [])) == 0:
-            gaps.append("* No police stations - Save emergency numbers: 100 (Police), 112 (Emergency)")
+        # Column widths optimized for multi-line content
+        col_widths = [30, 40, 20, 20, 25, 25, 40]  # Total: 240mm (will extend to next page if needed)
         
-        if not gaps:
-            gaps.append("* No critical service gaps identified - Good service coverage along route")
+        # Create multi-line table header
+        self._create_multiline_table_header(pdf, headers, col_widths)
         
-        pdf.set_font('Helvetica', '', 10)
+        # Get route start and end points for distance calculation
+        start_point = route_points[0] if route_points else None
+        end_point = route_points[-1] if route_points else None
+        
+        for i, poi in enumerate(poi_list[:25], 1):  # Show up to 25 facilities
+            # Calculate distances
+            dist_from_start = self._calculate_poi_distance(poi, start_point) if start_point else "N/A"
+            dist_from_end = self._calculate_poi_distance(poi, end_point) if end_point else "N/A"
+            
+            # Get full data without truncation
+            facility_name = poi.get('name', 'Unknown Facility')
+            full_address = poi.get('address', 'Address not available')
+            phone_number = self._extract_phone_number(poi)
+            
+            # Format GPS coordinates
+            lat = poi.get('latitude', 0)
+            lng = poi.get('longitude', 0)
+            gps_coordinates = f"{lat:.6f}, {lng:.6f}" if lat != 0 and lng != 0 else "GPS coordinates not available"
+            
+            # Generate live map link with actual address
+            live_map_link = self._generate_live_map_link_with_address(poi)
+            
+            # Prepare row data (NO TRUNCATION)
+            row_data = [
+                facility_name,
+                full_address,
+                dist_from_start,
+                dist_from_end,
+                gps_coordinates,
+                phone_number,
+                live_map_link
+            ]
+            
+            # Create multi-line row
+            self._create_multiline_table_row(pdf, row_data, col_widths)
+    def _create_multiline_table_header(self, pdf: 'EnhancedRoutePDF', headers: list, col_widths: list):
+        """Create table header with proper styling"""
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.set_fill_color(173, 216, 230)  # Light blue header
         pdf.set_text_color(0, 0, 0)
-        for gap in gaps:
-            pdf.cell(0, 6, gap, 0, 1, 'L')
-    
+        pdf.set_draw_color(0, 0, 0)
+        
+        header_height = 15
+        
+        # Draw header background and borders
+        total_width = sum(col_widths)
+        current_x = pdf.get_x()
+        current_y = pdf.get_y()
+        
+        # Background rectangle
+        pdf.rect(current_x, current_y, total_width, header_height, 'DF')
+        
+        # Header text
+        x_pos = current_x
+        for i, (header, width) in enumerate(zip(headers, col_widths)):
+            pdf.set_xy(x_pos + 2, current_y + 2)
+            
+            # Handle long header text with line breaks
+            if len(header) > 15:
+                lines = self._wrap_text_for_cell(header, width - 4)
+                line_height = header_height / len(lines)
+                for j, line in enumerate(lines):
+                    pdf.set_xy(x_pos + 2, current_y + 2 + (j * line_height))
+                    pdf.cell(width - 4, line_height, line, 0, 0, 'C')
+            else:
+                pdf.cell(width - 4, header_height - 4, header, 0, 0, 'C')
+            
+            # Vertical border line
+            if i < len(headers) - 1:
+                pdf.line(x_pos + width, current_y, x_pos + width, current_y + header_height)
+            
+            x_pos += width
+        
+        pdf.set_y(current_y + header_height)
+
+    def _create_multiline_table_row(self, pdf: 'EnhancedRoutePDF', row_data: list, col_widths: list):
+        """Create table row with multi-line cells that expand to fit content"""
+        
+        # Calculate required height for this row based on longest cell content
+        row_height = self._calculate_required_row_height(pdf, row_data, col_widths)
+        
+        # Set row styling
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_fill_color(255, 255, 255)  # White background
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_draw_color(0, 0, 0)
+        
+        current_x = pdf.get_x()
+        current_y = pdf.get_y()
+        
+        # Check if row fits on current page
+        if current_y + row_height > 280:  # Near bottom of page
+            pdf.add_page()
+            # Recreate header on new page
+            headers = [
+                'Facility Name', 'Full Address', 'Dist from Start', 
+                'Dist from End', 'GPS Coordinates', 'Phone Number', 'Live Map Link'
+            ]
+            self._create_multiline_table_header(pdf, headers, col_widths)
+            current_x = pdf.get_x()
+            current_y = pdf.get_y()
+        
+        # Draw row background
+        total_width = sum(col_widths)
+        pdf.rect(current_x, current_y, total_width, row_height, 'D')
+        
+        # Fill each cell with content
+        x_pos = current_x
+        for i, (cell_content, width) in enumerate(zip(row_data, col_widths)):
+            # Handle special formatting for different columns
+            if i == 5:  # Phone number column
+                self._draw_phone_number_cell(pdf, cell_content, x_pos, current_y, width, row_height)
+            elif i == 6:  # Live map link column
+                self._draw_map_link_cell(pdf, cell_content, x_pos, current_y, width, row_height)
+            else:
+                self._draw_multiline_text_cell(pdf, str(cell_content), x_pos, current_y, width, row_height)
+            
+            # Draw vertical border
+            if i < len(row_data) - 1:
+                pdf.line(x_pos + width, current_y, x_pos + width, current_y + row_height)
+            
+            x_pos += width
+        
+        pdf.set_y(current_y + row_height)
+
+    def _calculate_required_row_height(self, pdf: 'EnhancedRoutePDF', row_data: list, col_widths: list) -> float:
+        """Calculate the height needed for a row based on content"""
+        max_lines = 1
+        
+        for i, (content, width) in enumerate(zip(row_data, col_widths)):
+            content_str = str(content)
+            lines = self._wrap_text_for_cell(content_str, width - 4)
+            max_lines = max(max_lines, len(lines))
+        
+        # Minimum height of 12, with 6 units per additional line
+        return max(12, max_lines * 6)
+
+    def _wrap_text_for_cell(self, text: str, max_width_chars: int) -> list:
+        """Wrap text to fit within cell width"""
+        if not text:
+            return [""]
+        
+        # Estimate characters per line based on width (rough approximation)
+        chars_per_line = max(10, int(max_width_chars / 2.5))
+        
+        words = text.split()
+        lines = []
+        current_line = ""
+        
+        for word in words:
+            test_line = f"{current_line} {word}".strip()
+            if len(test_line) <= chars_per_line:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+        
+        if current_line:
+            lines.append(current_line)
+        
+        return lines if lines else [""]
+
+    def _draw_multiline_text_cell(self, pdf: 'EnhancedRoutePDF', content: str, x: float, y: float, width: float, height: float):
+        """Draw text cell with multiple lines"""
+        lines = self._wrap_text_for_cell(content, width - 4)
+        line_height = min(6, height / len(lines)) if lines else 6
+        
+        for i, line in enumerate(lines):
+            if i * line_height + line_height <= height - 2:  # Ensure text fits within cell
+                pdf.set_xy(x + 2, y + 2 + (i * line_height))
+                pdf.cell(width - 4, line_height, line, 0, 0, 'L')
+
+    def _draw_phone_number_cell(self, pdf: 'EnhancedRoutePDF', phone: str, x: float, y: float, width: float, height: float):
+        """Draw phone number cell with special formatting"""
+        if phone == "Not available" or not phone:
+            pdf.set_text_color(150, 150, 150)  # Gray for unavailable
+            pdf.set_xy(x + 2, y + height/2 - 2)
+            pdf.cell(width - 4, 4, "No phone", 0, 0, 'C')
+        else:
+            pdf.set_text_color(0, 0, 0)
+            lines = self._wrap_text_for_cell(phone, width - 4)
+            line_height = min(6, height / len(lines)) if lines else 6
+            
+            for i, line in enumerate(lines):
+                if i * line_height + line_height <= height - 2:
+                    pdf.set_xy(x + 2, y + 2 + (i * line_height))
+                    pdf.cell(width - 4, line_height, line, 0, 0, 'L')
+
+    def _draw_map_link_cell(self, pdf: 'EnhancedRoutePDF', map_link: str, x: float, y: float, width: float, height: float):
+        """Draw clickable map link cell"""
+        if "No GPS" in map_link or "not available" in map_link:
+            pdf.set_text_color(150, 150, 150)
+            pdf.set_xy(x + 2, y + height/2 - 2)
+            pdf.cell(width - 4, 4, "No map link", 0, 0, 'C')
+        else:
+            # Create clickable link
+            pdf.set_text_color(0, 82, 147)  # Blue color for links
+            pdf.set_font('Helvetica', 'U', 8)  # Underlined for link appearance
+            
+            lines = self._wrap_text_for_cell(map_link, width - 4)
+            line_height = min(6, height / len(lines)) if lines else 6
+            
+            for i, line in enumerate(lines):
+                if i * line_height + line_height <= height - 2:
+                    pdf.set_xy(x + 2, y + 2 + (i * line_height))
+                    # Create clickable link (if supported by PDF viewer)
+                    if "maps.google.com" in line:
+                        pdf.cell(width - 4, line_height, line, 0, 0, 'L', link=f"https://{line}")
+                    else:
+                        pdf.cell(width - 4, line_height, line, 0, 0, 'L')
+            
+            pdf.set_font('Helvetica', '', 8)  # Reset font
+
+    def _generate_live_map_link_with_address(self, poi: dict) -> str:
+        """Generate live map link with actual address"""
+        try:
+            lat = poi.get('latitude', 0)
+            lng = poi.get('longitude', 0)
+            name = poi.get('name', '')
+            address = poi.get('address', '')
+            
+            if lat == 0 or lng == 0:
+                if address:
+                    # Use address for search
+                    encoded_address = address.replace(' ', '+').replace(',', '%2C')
+                    return f"maps.google.com/maps?q={encoded_address}"
+                else:
+                    return "No GPS data or address available"
+            
+            # Create comprehensive map link with coordinates and place info
+            if name and address:
+                # Include both coordinates and address information
+                place_info = f"{name}, {address}".replace(' ', '+').replace(',', '%2C')
+                return f"maps.google.com/maps?q={lat},{lng}+({place_info})"
+            elif name:
+                return f"maps.google.com/maps?q={lat},{lng}+({name.replace(' ', '+')})"
+            else:
+                return f"maps.google.com/maps?q={lat},{lng}"
+                
+        except Exception as e:
+            print(f"Error generating map link: {e}")
+            return "Map link generation failed"
+
+
+    def _calculate_poi_distance(self, poi: dict, reference_point: dict) -> str:
+        """Calculate distance between POI and reference point"""
+        try:
+            if not reference_point or poi.get('latitude', 0) == 0:
+                return "N/A"
+            
+            import math
+            
+            # POI coordinates
+            poi_lat = float(poi.get('latitude', 0))
+            poi_lng = float(poi.get('longitude', 0))
+            
+            # Reference point coordinates
+            ref_lat = float(reference_point.get('latitude', 0))
+            ref_lng = float(reference_point.get('longitude', 0))
+            
+            if poi_lat == 0 or poi_lng == 0 or ref_lat == 0 or ref_lng == 0:
+                return "N/A"
+            
+            # Haversine formula for distance calculation
+            R = 6371  # Earth's radius in kilometers
+            
+            lat1_rad = math.radians(poi_lat)
+            lat2_rad = math.radians(ref_lat)
+            delta_lat = math.radians(ref_lat - poi_lat)
+            delta_lng = math.radians(ref_lng - poi_lng)
+            
+            a = (math.sin(delta_lat/2) * math.sin(delta_lat/2) +
+                math.cos(lat1_rad) * math.cos(lat2_rad) *
+                math.sin(delta_lng/2) * math.sin(delta_lng/2))
+            
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+            distance = R * c
+            
+            return f"{distance:.1f} km"
+            
+        except Exception as e:
+            print(f"Error calculating distance: {e}")
+            return "N/A"
+
+    def _extract_phone_number(self, poi: dict) -> str:
+        """Extract phone number from POI data - Enhanced version"""
+        try:
+            # Check multiple possible phone number fields
+            phone_fields = [
+                'formatted_phone_number',
+                'international_phone_number', 
+                'phone_number',
+                'contact_number'
+            ]
+            
+            for field in phone_fields:
+                if poi.get(field):
+                    return str(poi[field])
+            
+            # Check additional_info JSON field
+            additional_info = poi.get('additional_info')
+            if additional_info:
+                try:
+                    import json
+                    info_dict = json.loads(additional_info)
+                    for field in phone_fields:
+                        if info_dict.get(field):
+                            return str(info_dict[field])
+                except:
+                    pass
+            
+            # Check if phone number is embedded in address or name
+            address = str(poi.get('address', ''))
+            name = str(poi.get('name', ''))
+            
+            # Enhanced regex for phone numbers
+            import re
+            phone_patterns = [
+                r'(\+\d{1,3}[\s-]?\(?\d{1,4}\)?[\s-]?\d{1,4}[\s-]?\d{1,4}[\s-]?\d{1,9})',
+                r'(\d{3}[\s-]?\d{3}[\s-]?\d{4})',
+                r'(\(\d{3}\)\s?\d{3}[\s-]?\d{4})'
+            ]
+            
+            for text in [address, name]:
+                for pattern in phone_patterns:
+                    match = re.search(pattern, text)
+                    if match:
+                        return match.group(0)
+            
+            return "Phone number not available"
+            
+        except Exception as e:
+            print(f"Error extracting phone number: {e}")
+            return "Phone extraction failed"
+
+    def _generate_map_link(self, poi: dict) -> str:
+        """Generate live map link for POI"""
+        try:
+            lat = poi.get('latitude', 0)
+            lng = poi.get('longitude', 0)
+            
+            if lat == 0 or lng == 0:
+                return "No GPS data"
+            
+            # Generate Google Maps link
+            maps_url = f"maps.google.com/maps?q={lat},{lng}"
+            
+            # Truncate for PDF display
+            return self._truncate_text(maps_url, 25)
+            
+        except Exception as e:
+            print(f"Error generating map link: {e}")
+            return "Not available"
+
+    def _truncate_text(self, text: str, max_length: int) -> str:
+        """Truncate text to fit in PDF table cells"""
+        if not text:
+            return "N/A"
+        
+        text = str(text)
+        if len(text) <= max_length:
+            return text
+        
+        return text[:max_length-3] + "..."
+    # def _add_pois_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
+    #     """Add comprehensive Points of Interest analysis"""
+    #     from api.route_api import RouteAPI
+    #     route_api = RouteAPI(self.db_manager, None)
+    #     pois_data = route_api.get_points_of_interest(route_id)
+        
+    #     if 'error' in pois_data:
+    #         pdf.add_page()
+    #         pdf.add_section_header("POINTS OF INTEREST ANALYSIS", "info")
+    #         pdf.set_font('Helvetica', '', 12)
+    #         pdf.cell(0, 10, 'Points of Interest data not available.', 0, 1, 'L')
+    #         return
+        
+    #     pdf.add_page()
+    #     pdf.add_section_header("COMPREHENSIVE POINTS OF INTEREST ANALYSIS", "info")
+        
+    #     # POI Statistics
+    #     stats = pois_data['statistics']
+        
+    #     # Summary statistics
+    #     summary_table = [
+    #         ['Total POIs Identified', f"{stats['total_pois']:,}"],
+    #         ['Emergency Services', f"{stats['emergency_services']:,}"],
+    #         ['Essential Services', f"{stats['essential_services']:,}"],
+    #         ['Other Services', f"{stats['other_services']:,}"],
+    #         ['Coverage Score', f"{stats['coverage_score']}/100"],
+    #         ['Service Availability Rating', 'EXCELLENT' if stats['coverage_score'] > 80 else 'GOOD' if stats['coverage_score'] > 60 else 'MODERATE' if stats['coverage_score'] > 40 else 'LIMITED']
+    #     ]
+        
+    #     pdf.create_detailed_table(summary_table, [70, 110])
+        
+    #     # Service availability assessment
+    #     pdf.ln(10)
+    #     coverage_score = stats['coverage_score']
+    #     if coverage_score >= 80:
+    #         color = self.success_color
+    #         status = "EXCELLENT SERVICE COVERAGE"
+    #     elif coverage_score >= 60:
+    #         color = self.info_color
+    #         status = "GOOD SERVICE COVERAGE"
+    #     elif coverage_score >= 40:
+    #         color = self.warning_color
+    #         status = "MODERATE SERVICE COVERAGE"
+    #     else:
+    #         color = self.danger_color
+    #         status = "LIMITED SERVICE COVERAGE"
+        
+    #     pdf.set_fill_color(*color)
+    #     pdf.rect(10, pdf.get_y(), 190, 12, 'F')
+    #     pdf.set_text_color(255, 255, 255)
+    #     pdf.set_font('Helvetica', 'B', 12)
+    #     pdf.set_xy(15, pdf.get_y() + 2)
+    #     pdf.cell(180, 8, f'SERVICE AVAILABILITY: {status} ({coverage_score}/100)', 0, 1, 'C')
+        
+    #     # Detailed POI Categories
+    #     pois = pois_data['pois_by_type']
+        
+    #     poi_categories = [
+    #         ('hospitals', 'MEDICAL FACILITIES - Emergency Healthcare Services', self.danger_color, 'CRITICAL'),
+    #         ('police', 'LAW ENFORCEMENT - Security & Emergency Response', self.primary_color, 'CRITICAL'),
+    #         ('fire_stations', 'FIRE & RESCUE - Emergency Response Services', self.danger_color, 'CRITICAL'),
+    #         ('gas_stations', 'FUEL STATIONS - Vehicle Refueling Points', self.warning_color, 'ESSENTIAL'),
+    #         ('schools', 'EDUCATIONAL INSTITUTIONS - Speed Limit Zones (40 km/h)', self.success_color, 'AWARENESS'),
+    #         ('restaurants', 'FOOD & REST - Meal Stops & Driver Rest Areas', self.info_color, 'CONVENIENCE')
+    #     ]
+        
+    #     for poi_type, title, color, priority in poi_categories:
+    #         poi_list = pois.get(poi_type, [])
+    #         pdf.add_page()  # <-- ADD THIS LINE
+    #         # pdf.ln(15)
+    #         pdf.set_font('Helvetica', 'B', 12)
+    #         pdf.set_text_color(*color)
+    #         pdf.cell(0, 8, f'{title} ({len(poi_list)} found) - {priority}', 0, 1, 'L')
+            
+    #         if not poi_list:
+    #             pdf.set_font('Helvetica', 'I', 10)
+    #             pdf.set_text_color(150, 150, 150)
+    #             pdf.cell(0, 6, f'   No {poi_type.replace("_", " ")} found along this route', 0, 1, 'L')
+    #             continue
+            
+    #         # Create detailed table for this POI type
+    #         headers = ['#', 'Facility Name', 'Location/Address', 'Distance', 'Notes']
+    #         col_widths = [15, 55, 65, 25, 25]
+            
+    #         pdf.create_table_header(headers, col_widths)
+            
+    #         for i, poi in enumerate(poi_list, 1):  # Limit to 15 per type
+    #             notes = ""
+    #             if poi_type == 'schools':
+    #                 notes = "40 km/h"
+    #             elif poi_type == 'hospitals':
+    #                 notes = "Emergency"
+    #             elif poi_type == 'gas_stations':
+    #                 notes = "Fuel"
+                
+    #             row_data = [
+    #                 str(i),
+    #                 poi.get('name', 'Unknown'),
+    #                 poi.get('address', 'Unknown location'),
+    #                 "Along route",
+    #                 notes
+    #             ]
+                
+    #             pdf.create_table_row(row_data, col_widths)
+        
+    #     # Service recommendations
+    #     recommendations = pois_data.get('recommendations', [])
+    #     if recommendations:
+    #         pdf.ln(15)
+    #         pdf.set_font('Helvetica', 'B', 12)
+    #         pdf.set_text_color(*self.primary_color)
+    #         pdf.cell(0, 8, 'SERVICE AVAILABILITY RECOMMENDATIONS', 0, 1, 'L')
+            
+    #         pdf.set_font('Helvetica', '', 10)
+    #         pdf.set_text_color(0, 0, 0)
+    #         for i, rec in enumerate(recommendations, 1):
+    #             pdf.cell(8, 6, f'{i}.', 0, 0, 'L')
+    #             pdf.multi_cell(172, 6, rec, 0, 'L')
+    #             pdf.ln(2)
+        
+    #     # Critical service gaps analysis
+    #     pdf.ln(10)
+    #     pdf.set_font('Helvetica', 'B', 12)
+    #     pdf.set_text_color(*self.danger_color)
+    #     pdf.cell(0, 8, 'CRITICAL SERVICE GAPS IDENTIFIED', 0, 1, 'L')
+        
+    #     gaps = []
+    #     if len(pois.get('hospitals', [])) == 0:
+    #         gaps.append("* No medical facilities - Carry first aid kit and emergency contact numbers")
+    #     if len(pois.get('gas_stations', [])) < 2:
+    #         gaps.append("* Limited fuel stations - Plan refueling stops and carry extra fuel if possible")
+    #     if len(pois.get('police', [])) == 0:
+    #         gaps.append("* No police stations - Save emergency numbers: 100 (Police), 112 (Emergency)")
+        
+    #     if not gaps:
+    #         gaps.append("* No critical service gaps identified - Good service coverage along route")
+        
+    #     pdf.set_font('Helvetica', '', 10)
+    #     pdf.set_text_color(0, 0, 0)
+    #     for gap in gaps:
+    #         pdf.cell(0, 6, gap, 0, 1, 'L')
+    def _add_pois_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
+        """Add comprehensive Points of Interest analysis with enhanced details"""
+        # Use the new enhanced method from the artifact above
+        return self._add_enhanced_pois_page(pdf, route_id)
     def _add_network_page(self, pdf: 'EnhancedRoutePDF', route_id: str):
         """Add comprehensive network coverage analysis"""
         from api.route_api import RouteAPI

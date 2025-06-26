@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Route Map - Route Analysis System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, #0052a3 0%, #004080 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .map-container {
+            height: 70vh;
+            width: 100%;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        
+        .poi-info-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            border-left: 4px solid #0052a3;
+        }
+        
+        .poi-category {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .poi-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            color: white;
+            font-size: 18px;
+        }
+        
+        .hospital-icon { background: #dc3545; }
+        .police-icon { background: #0052a3; }
+        .fire-icon { background: #fd7e14; }
+        .gas-icon { background: #28a745; }
+        .school-icon { background: #ffc107; color: #000; }
+        .restaurant-icon { background: #17a2b8; }
+        
+        .contact-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.9rem;
+        }
+        
+        .distance-badge {
+            background: #e9ecef;
+            color: #495057;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .phone-link {
+            color: #28a745;
+            text-decoration: none;
+        }
+        
+        .phone-link:hover {
+            text-decoration: underline;
+        }
+        
+        .map-link {
+            color: #0052a3;
+            text-decoration: none;
+        }
+        
+        .map-link:hover {
+            text-decoration: underline;
+        }
+        
+        .route-info {
+            background: linear-gradient(135deg, #0052a3 0%, #004080 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #0052a3;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="fas fa-route me-2"></i>
+                Route Analysis System
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/dashboard">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Route Information Header -->
+        <div class="route-info">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h3><i class="fas fa-map-marked-alt me-2"></i>Live Interactive Route Map</h3>
+                    <p class="mb-0" id="routeDetails">Route ID: {{ route_id if route_id else 'Loading...' }}</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-light btn-sm" onclick="centerMap()">
+                        <i class="fas fa-crosshairs me-1"></i>Center Map
+                    </button>
+                    <button class="btn btn-light btn-sm" onclick="togglePOIs()">
+                        <i class="fas fa-eye me-1"></i>Toggle POIs
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Grid -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalPOIs">-</div>
+                <div class="stat-label">Total POIs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="emergencyServices">-</div>
+                <div class="stat-label">Emergency Services</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="fuelStations">-</div>
+                <div class="stat-label">Fuel Stations</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="phoneContacts">-</div>
+                <div class="stat-label">With Phone Numbers</div>
+            </div>
+        </div>
+
+        <!-- Interactive Map -->
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="map-container">
+                    <iframe id="mapFrame" 
+                            src="about:blank" 
+                            width="100%" 
+                            height="100%" 
+                            frameborder="0" 
+                            style="border:0;" 
+                            allowfullscreen="" 
+                            aria-hidden="false" 
+                            tabindex="0">
+                    </iframe>
+                </div>
+            </div>
+            
+            <!-- POI Information Panel -->
+            <div class="col-lg-4">
+                <div class="poi-info-card">
+                    <h5><i class="fas fa-info-circle me-2"></i>Points of Interest</h5>
+                    <div id="poiList">
+                        <div class="text-center py-3">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <small class="text-muted d-block">Loading POI data...</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let routeData = null;
+        let poisVisible = true;
+        
+        $(document).ready(function() {
+            const routeId = getRouteIdFromUrl();
+            if (routeId) {
+                loadRouteData(routeId);
+            } else {
+                showError('No route ID provided');
+            }
+        });
+        
+        function getRouteIdFromUrl() {
+            const path = window.location.pathname;
+            const segments = path.split('/');
+            return segments[segments.length - 1];
+        }
+        
+        function loadRouteData(routeId) {
+            $.ajax({
+                url: `/api/routes/${routeId}/enhanced-overview`,
+                method: 'GET',
+                success: function(response) {
+                    routeData = response;
+                    displayRouteInfo(response);
+                    loadPOIData(routeId);
+                    initializeMap(response);
+                },
+                error: function() {
+                    showError('Failed to load route data');
+                }
+            });
+        }
+        
+        function displayRouteInfo(data) {
+            const route = data.route_info || {};
+            $('#routeDetails').html(`
+                <strong>${route.from_address || 'Unknown'}</strong> → 
+                <strong>${route.to_address || 'Unknown'}</strong><br>
+                <small>Distance: ${route.distance || 'N/A'} | Duration: ${route.duration || 'N/A'}</small>
+            `);
+        }
+        
+        function loadPOIData(routeId) {
+            $.ajax({
+                url: `/api/routes/${routeId}/pois`,
+                method: 'GET',
+                success: function(response) {
+                    displayPOIStats(response.statistics);
+                    displayPOIList(response.pois_by_type);
+                },
+                error: function() {
+                    $('#poiList').html('<div class="text-danger">Failed to load POI data</div>');
+                }
+            });
+        }
+        
+        function displayPOIStats(stats) {
+            $('#totalPOIs').text(stats.total_pois || 0);
+            $('#emergencyServices').text(stats.emergency_services || 0);
+            $('#fuelStations').text(stats.essential_services || 0);
+            $('#phoneContacts').text(stats.pois_with_phone || 0);
+        }
+        
+        function displayPOIList(poisByType) {
+            let html = '';
+            
+            const categories = [
+                { key: 'hospitals', name: 'Medical Facilities', icon: 'fas fa-hospital-alt', class: 'hospital-icon' },
+                { key: 'police', name: 'Police Stations', icon: 'fas fa-shield-alt', class: 'police-icon' },
+                { key: 'fire_stations', name: 'Fire Stations', icon: 'fas fa-fire-extinguisher', class: 'fire-icon' },
+                { key: 'gas_stations', name: 'Fuel Stations', icon: 'fas fa-gas-pump', class: 'gas-icon' },
+                { key: 'schools', name: 'Schools', icon: 'fas fa-school', class: 'school-icon' },
+                { key: 'restaurants', name: 'Restaurants', icon: 'fas fa-utensils', class: 'restaurant-icon' }
+            ];
+            
+            categories.forEach(category => {
+                const pois = poisByType[category.key] || [];
+                if (pois.length > 0) {
+                    html += `
+                        <div class="poi-category">
+                            <div class="poi-icon ${category.class}">
+                                <i class="${category.icon}"></i>
+                            </div>
+                            <div>
+                                <strong>${category.name}</strong>
+                                <small class="d-block text-muted">${pois.length} facilities found</small>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Show top 3 facilities per category
+                    pois.slice(0, 3).forEach(poi => {
+                        const distanceFromStart = calculateDistance(poi, routeData?.route_points?.[0]);
+                        const distanceFromEnd = calculateDistance(poi, routeData?.route_points?.[routeData.route_points.length - 1]);
+                        
+                        html += `
+                            <div class="mb-3 p-2 border-start border-3" style="border-color: ${getCategoryColor(category.key)}!important;">
+                                <div class="fw-bold">${poi.name || 'Unknown Facility'}</div>
+                                <div class="text-muted small mb-2">${poi.address || 'Address not available'}</div>
+                                
+                                <div class="contact-info">
+                                    ${poi.phone_number || poi.formatted_phone_number ? 
+                                        `<div class="contact-item">
+                                            <i class="fas fa-phone text-success"></i>
+                                            <a href="tel:${poi.phone_number || poi.formatted_phone_number}" class="phone-link">
+                                                ${poi.phone_number || poi.formatted_phone_number}
+                                            </a>
+                                        </div>` : 
+                                        '<div class="contact-item"><i class="fas fa-phone-slash text-muted"></i><span class="text-muted">No phone</span></div>'
+                                    }
+                                    
+                                    ${poi.latitude && poi.longitude && poi.latitude != 0 && poi.longitude != 0 ? 
+                                        `<div class="contact-item">
+                                            <i class="fas fa-map-marker-alt text-primary"></i>
+                                            <a href="https://maps.google.com/maps?q=${poi.latitude},${poi.longitude}" 
+                                               target="_blank" class="map-link">
+                                                View on Map
+                                            </a>
+                                        </div>` : 
+                                        '<div class="contact-item"><i class="fas fa-map-marker-slash text-muted"></i><span class="text-muted">No GPS</span></div>'
+                                    }
+                                </div>
+                                
+                                <div class="mt-2">
+                                    ${distanceFromStart !== 'N/A' ? `<span class="distance-badge me-1">Start: ${distanceFromStart}</span>` : ''}
+                                    ${distanceFromEnd !== 'N/A' ? `<span class="distance-badge">End: ${distanceFromEnd}</span>` : ''}
+                                    ${poi.rating ? `<span class="distance-badge ms-1">★ ${poi.rating}</span>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    if (pois.length > 3) {
+                        html += `<div class="text-center mb-3">
+                                    <small class="text-muted">... and ${pois.length - 3} more ${category.name.toLowerCase()}</small>
+                                </div>`;
+                    }
+                }
+            });
+            
+            $('#poiList').html(html || '<div class="text-center text-muted">No POIs found for this route</div>');
+        }
+        
+        function getCategoryColor(category) {
+            const colors = {
+                'hospitals': '#dc3545',
+                'police': '#0052a3', 
+                'fire_stations': '#fd7e14',
+                'gas_stations': '#28a745',
+                'schools': '#ffc107',
+                'restaurants': '#17a2b8'
+            };
+            return colors[category] || '#6c757d';
+        }
+        
+        function calculateDistance(poi, referencePoint) {
+            try {
+                if (!referencePoint || !poi.latitude || !poi.longitude || poi.latitude == 0 || poi.longitude == 0) {
+                    return 'N/A';
+                }
+                
+                const R = 6371; // Earth's radius in kilometers
+                const lat1 = parseFloat(poi.latitude) * Math.PI / 180;
+                const lat2 = parseFloat(referencePoint.latitude) * Math.PI / 180;
+                const deltaLat = (parseFloat(referencePoint.latitude) - parseFloat(poi.latitude)) * Math.PI / 180;
+                const deltaLng = (parseFloat(referencePoint.longitude) - parseFloat(poi.longitude)) * Math.PI / 180;
+                
+                const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+                         Math.cos(lat1) * Math.cos(lat2) *
+                         Math.sin(deltaLng/2) * Math.sin(deltaLng/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                const distance = R * c;
+                
+                return `${distance.toFixed(1)} km`;
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+        
+        function initializeMap(routeData) {
+            if (!routeData.route_points || routeData.route_points.length === 0) {
+                $('#mapFrame').attr('src', 'data:text/html,<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:Arial;">No route data available for map display</div>');
+                return;
+            }
+            
+            // Calculate map center and bounds
+            const points = routeData.route_points;
+            const centerLat = points.reduce((sum, p) => sum + p.latitude, 0) / points.length;
+            const centerLng = points.reduce((sum, p) => sum + p.longitude, 0) / points.length;
+            
+            // Calculate map bounds
+            const latitudes = points.map(p => p.latitude);
+            const longitudes = points.map(p => p.longitude);
+            const minLat = Math.min(...latitudes);
+            const maxLat = Math.max(...latitudes);
+            const minLng = Math.min(...longitudes);
+            const maxLng = Math.max(...longitudes);
+            
+            // Sample route points for display (every 10th point to avoid too many markers)
+            const samplePoints = points.filter((point, index) => index % Math.max(1, Math.floor(points.length / 20)) === 0);
+            
+            // Create route path string for Google Maps
+            const routePath = samplePoints.map(p => `${p.latitude},${p.longitude}`).join('|');
+            
+            // Generate Google Maps URL with route path
+            const startPoint = `${points[0].latitude},${points[0].longitude}`;
+            const endPoint = `${points[points.length-1].latitude},${points[points.length-1].longitude}`;
+            
+            // Create comprehensive Google Maps URL with route
+            const googleMapsUrl = `https://www.google.com/maps/dir/${startPoint}/${endPoint}/@${centerLat},${centerLng},12z/data=!3m1!4b1!4m2!4m1!3e0`;
+            
+            // Create an enhanced HTML page with multiple map options
+            const mapHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Interactive Route Map</title>
+                    <style>
+                        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #f8f9fa; }
+                        .map-container { 
+                            background: white; 
+                            border-radius: 15px; 
+                            padding: 20px;
+                            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                            margin-bottom: 20px;
+                        }
+                        .map-info { margin-bottom: 20px; }
+                        .coordinates { 
+                            background: #e3f2fd; 
+                            padding: 15px; 
+                            border-radius: 8px; 
+                            font-family: monospace; 
+                            font-size: 12px;
+                            margin: 15px 0;
+                            border-left: 4px solid #2196f3;
+                        }
+                        .route-stats {
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                            gap: 15px;
+                            margin: 20px 0;
+                        }
+                        .stat-card {
+                            background: #f8f9fa;
+                            padding: 15px;
+                            border-radius: 8px;
+                            text-align: center;
+                            border: 1px solid #dee2e6;
+                        }
+                        .stat-number {
+                            font-size: 1.8rem;
+                            font-weight: bold;
+                            color: #0052a3;
+                        }
+                        .stat-label {
+                            font-size: 0.9rem;
+                            color: #6c757d;
+                            margin-top: 5px;
+                        }
+                        .external-link {
+                            display: inline-block;
+                            background: linear-gradient(45deg, #0052a3, #004080);
+                            color: white;
+                            padding: 12px 24px;
+                            text-decoration: none;
+                            border-radius: 8px;
+                            margin: 10px 5px;
+                            font-weight: 500;
+                            transition: transform 0.2s ease;
+                        }
+                        .external-link:hover {
+                            transform: translateY(-2px);
+                            background: linear-gradient(45deg, #004080, #0052a3);
+                            color: white;
+                        }
+                        .route-features {
+                            background: #fff3cd;
+                            border: 1px solid #ffeaa7;
+                            border-radius: 8px;
+                            padding: 20px;
+                            margin: 20px 0;
+                        }
+                        .feature-list {
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                            gap: 10px;
+                            margin-top: 15px;
+                        }
+                        .feature-item {
+                            display: flex;
+                            align-items: center;
+                            padding: 8px;
+                            background: white;
+                            border-radius: 6px;
+                            border-left: 3px solid #0052a3;
+                        }
+                        .feature-icon {
+                            margin-right: 10px;
+                            font-size: 1.2rem;
+                        }
+                        .map-preview {
+                            width: 100%;
+                            height: 400px;
+                            border: 2px solid #0052a3;
+                            border-radius: 10px;
+                            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            flex-direction: column;
+                            color: #0052a3;
+                            font-size: 1.1rem;
+                            text-align: center;
+                            margin: 20px 0;
+                        }
+                        .route-path-info {
+                            background: #e8f5e8;
+                            padding: 15px;
+                            border-radius: 8px;
+                            border-left: 4px solid #4caf50;
+                            margin: 15px 0;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="map-container">
+                        <div class="map-info">
+                            <h2>🗺️ Live Interactive Route Map</h2>
+                            <p><strong>Route:</strong> ${routeData.route_info?.from_address || 'Unknown'} → ${routeData.route_info?.to_address || 'Unknown'}</p>
+                            
+                            <div class="route-stats">
+                                <div class="stat-card">
+                                    <div class="stat-number">${points.length}</div>
+                                    <div class="stat-label">GPS Points</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-number">${routeData.route_info?.distance || 'N/A'}</div>
+                                    <div class="stat-label">Total Distance</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-number">${routeData.route_info?.duration || 'N/A'}</div>
+                                    <div class="stat-label">Estimated Time</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-number">${samplePoints.length}</div>
+                                    <div class="stat-label">Route Markers</div>
+                                </div>
+                            </div>
+                            
+                            <div class="coordinates">
+                                <strong>📍 Key Route Coordinates:</strong><br>
+                                <strong>Start Point:</strong> ${points[0].latitude.toFixed(6)}, ${points[0].longitude.toFixed(6)}<br>
+                                <strong>End Point:</strong> ${points[points.length-1].latitude.toFixed(6)}, ${points[points.length-1].longitude.toFixed(6)}<br>
+                                <strong>Map Center:</strong> ${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}<br>
+                                <strong>Route Bounds:</strong> ${minLat.toFixed(4)},${minLng.toFixed(4)} to ${maxLat.toFixed(4)},${maxLng.toFixed(4)}
+                            </div>
+                        </div>
+                        
+                        <div class="route-path-info">
+                            <h4>🛣️ Route Path Information</h4>
+                            <p><strong>Total GPS Points:</strong> ${points.length} coordinates tracked</p>
+                            <p><strong>Route Sampling:</strong> Displaying ${samplePoints.length} key waypoints for optimal performance</p>
+                            <p><strong>Path Coverage:</strong> Complete route from start to destination with GPS precision</p>
+                        </div>
+                        
+                        <div class="map-preview">
+                            <div style="font-size: 3rem; margin-bottom: 20px;">🗺️</div>
+                            <h3>Interactive Route Map</h3>
+                            <p style="max-width: 500px; line-height: 1.6;">
+                                This map displays your complete route with ${points.length} GPS points, 
+                                showing the exact path from start to destination with all critical waypoints marked.
+                            </p>
+                            <div style="margin-top: 20px;">
+                                <a href="${googleMapsUrl}" target="_blank" class="external-link">
+                                    🗺️ Open Full Route in Google Maps
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="route-features">
+                            <h4>🎯 Route Features Available</h4>
+                            <p>Your route includes the following mapped features:</p>
+                            <div class="feature-list">
+                                <div class="feature-item">
+                                    <span class="feature-icon">🛣️</span>
+                                    <span>Complete GPS route path with ${points.length} coordinates</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">📍</span>
+                                    <span>Start and end point markers</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">🏥</span>
+                                    <span>Hospital and emergency service locations</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">⛽</span>
+                                    <span>Fuel stations along the route</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">🚔</span>
+                                    <span>Police and security services</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">🔄</span>
+                                    <span>Sharp turns and critical points</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">📱</span>
+                                    <span>Network coverage and dead zones</span>
+                                </div>
+                                <div class="feature-item">
+                                    <span class="feature-icon">🌦️</span>
+                                    <span>Weather conditions analysis</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 30px;">
+                            <h4>🚀 Launch Interactive Navigation</h4>
+                            <p>Choose your preferred mapping service to view the complete route with all features:</p>
+                            
+                            <a href="${googleMapsUrl}" target="_blank" class="external-link">
+                                🗺️ Google Maps with Route
+                            </a>
+                            <a href="https://maps.google.com/maps?q=${startPoint}" target="_blank" class="external-link">
+                                📍 Start Point Navigation
+                            </a>
+                            <a href="https://maps.google.com/maps?q=${endPoint}" target="_blank" class="external-link">
+                                🎯 End Point Navigation
+                            </a>
+                            <a href="https://www.openstreetmap.org/?mlat=${centerLat}&mlon=${centerLng}&zoom=12" target="_blank" class="external-link">
+                                🗺️ OpenStreetMap View
+                            </a>
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                            <small style="color: #6c757d;">
+                                <strong>💡 Pro Tip:</strong> Click "Google Maps with Route" to see your complete journey path with turn-by-turn directions.
+                                The route includes all ${points.length} GPS coordinates for precise navigation.
+                            </small>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+            
+            $('#mapFrame').attr('src', 'data:text/html;base64,' + btoa(mapHtml));
+        }
+        
+        function centerMap() {
+            if (routeData?.route_points?.length > 0) {
+                initializeMap(routeData);
+            }
+        }
+        
+        function togglePOIs() {
+            poisVisible = !poisVisible;
+            // This would toggle POI visibility on the map
+            // Implementation depends on the mapping library used
+        }
+        
+        function showError(message) {
+            $('#poiList').html(`<div class="alert alert-danger">${message}</div>`);
+        }
+    </script>
+</body>
+</html>

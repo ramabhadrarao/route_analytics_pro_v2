@@ -432,7 +432,9 @@
     <button class="btn btn-primary" onclick="generatePDF('{{ route.id }}')">
         <i class="fas fa-file-pdf"></i> Enhanced PDF
     </button>
-    
+     <a href="{{ url_for('live_route_map', route_id=route.id) }}" class="btn btn-warning">
+        <i class="fas fa-map"></i> Live Map
+    </a>
     <!-- NEW: View Web Report button -->
     <a href="{{ url_for('view_route_report', route_id=route.id) }}" class="btn btn-success">
         <i class="fas fa-chart-line"></i> View Report

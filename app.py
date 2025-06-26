@@ -302,6 +302,19 @@ class RouteAnalysisApp:
                     return jsonify(self.route_api.get_route_overview(route_id))
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
+        @self.app.route('/map/<route_id>')
+        def live_route_map(route_id):
+            """Display live interactive map for a specific route"""
+            if 'logged_in' not in session:
+                return redirect(url_for('login'))
+            
+            # Verify route exists
+            route = self.db_manager.get_route(route_id)
+            if not route:
+                return render_template('error.html', 
+                                    error_message=f'Route {route_id} not found'), 404
+            
+            return render_template('live_map.html', route_id=route_id, route=route)
     def run(self, debug=True, port=5000):
         """Run the Flask application"""
         print("\n🚀 Starting Fresh Route Analysis System...")

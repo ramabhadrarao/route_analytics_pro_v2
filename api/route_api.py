@@ -1105,3 +1105,88 @@ class RouteAPI:
             'Mixed Terrain': 'Varied terrain with multiple characteristics'
         }
         return descriptions.get(terrain_type, 'Terrain characteristics not fully analyzed')
+    # Update your existing method in route_api.py
+    def get_enhanced_points_of_interest(self, route_id: str) -> Dict[str, Any]:
+        """Get POI data with enhanced contact and location information"""
+        try:
+            # Use enhanced database methods
+            pois = {
+                'hospitals': self.db_manager.get_poi_with_contact_info(route_id, 'hospital'),
+                'gas_stations': self.db_manager.get_enhanced_pois_by_type(route_id, 'gas_station'),
+                'schools': self.db_manager.get_enhanced_pois_by_type(route_id, 'school'),
+                'restaurants': self.db_manager.get_enhanced_pois_by_type(route_id, 'restaurant'),
+                'police': self.db_manager.get_poi_with_contact_info(route_id, 'police'),
+                'fire_stations': self.db_manager.get_poi_with_contact_info(route_id, 'fire_station')
+            }
+            
+            # Calculate enhanced statistics
+            total_pois = sum(len(poi_list) for poi_list in pois.values())
+            pois_with_phone = sum(
+                len([p for p in poi_list if p.get('phone_number') or p.get('formatted_phone_number')])
+                for poi_list in pois.values()
+            )
+            pois_with_gps = sum(
+                len([p for p in poi_list if p.get('latitude', 0) != 0 and p.get('longitude', 0) != 0])
+                for poi_list in pois.values()
+            )
+            
+            # Categorize by importance
+            emergency_services = len(pois['hospitals']) + len(pois['police']) + len(pois['fire_stations'])
+            essential_services = len(pois['gas_stations'])
+            other_services = len(pois['schools']) + len(pois['restaurants'])
+            
+            return {
+                'pois_by_type': pois,
+                'statistics': {
+                    'total_pois': total_pois,
+                    'emergency_services': emergency_services,
+                    'essential_services': essential_services,
+                    'other_services': other_services,
+                    'pois_with_phone': pois_with_phone,
+                    'pois_with_gps': pois_with_gps,
+                    'phone_coverage_percentage': round((pois_with_phone / total_pois * 100), 1) if total_pois > 0 else 0,
+                    'gps_coverage_percentage': round((pois_with_gps / total_pois * 100), 1) if total_pois > 0 else 0,
+                    'coverage_score': min(100, (emergency_services * 20) + (essential_services * 10) + (other_services * 5))
+                },
+                'recommendations': self._generate_enhanced_poi_recommendations(pois, total_pois, pois_with_phone)
+            }
+            
+        except Exception as e:
+            return {'error': str(e)}
+
+    def _generate_enhanced_poi_recommendations(self, pois: Dict, total_pois: int, pois_with_phone: int) -> List[str]:
+        """Generate enhanced POI recommendations"""
+        recommendations = []
+        
+        # Check for critical service gaps
+        if len(pois.get('hospitals', [])) == 0:
+            recommendations.append("No hospitals found - Identify nearest medical facilities and save contact numbers")
+        elif len(pois.get('hospitals', [])) < 2:
+            recommendations.append("Limited medical facilities - Plan backup medical contact options")
+        
+        if len(pois.get('gas_stations', [])) < 3:
+            recommendations.append("Limited fuel stations - Plan refueling stops and carry fuel reserves if possible")
+        
+        if len(pois.get('police', [])) == 0:
+            recommendations.append("No police stations identified - Save emergency numbers: 100 (Police), 112 (Emergency)")
+        
+        # Phone coverage recommendations
+        phone_coverage = (pois_with_phone / total_pois * 100) if total_pois > 0 else 0
+        if phone_coverage < 50:
+            recommendations.append("Limited contact information available - Research facility phone numbers before travel")
+        
+        # GPS coverage recommendations
+        gps_facilities = sum(
+            len([p for p in poi_list if p.get('latitude', 0) != 0 and p.get('longitude', 0) != 0])
+            for poi_list in pois.values()
+        )
+        gps_coverage = (gps_facilities / total_pois * 100) if total_pois > 0 else 0
+        if gps_coverage < 80:
+            recommendations.append("Some facilities lack GPS coordinates - Verify locations using landmarks")
+        
+        # Emergency preparedness
+        critical_services = len(pois['hospitals']) + len(pois['police']) + len(pois['fire_stations'])
+        if critical_services < 5:
+            recommendations.append("Limited emergency services coverage - Carry emergency communication devices")
+        
+        return recommendations

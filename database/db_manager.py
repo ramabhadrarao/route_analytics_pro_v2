@@ -929,3 +929,95 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting enhanced route overview data: {e}")
             return {}
+    # Enhanced POI database methods for db_manager.py
+    # Add these methods to your DatabaseManager class
+
+    def get_enhanced_pois_by_type(self, route_id: str, poi_type: str) -> List[Dict]:
+        """Get enhanced POIs with additional contact and location details"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Enhanced query to get all POI data including phone numbers
+                cursor.execute("""
+                    SELECT 
+                        name,
+                        latitude,
+                        longitude,
+                        address,
+                        phone_number,
+                        place_id,
+                        rating,
+                        additional_info,
+                        distance_from_route
+                    FROM pois 
+                    WHERE route_id = ? AND poi_type = ?
+                    ORDER BY 
+                        CASE 
+                            WHEN latitude != 0 AND longitude != 0 THEN 0 
+                            ELSE 1 
+                        END,
+                        rating DESC,
+                        name
+                """, (route_id, poi_type))
+                
+                pois = []
+                for row in cursor.fetchall():
+                    poi_dict = dict(row)
+                    
+                    # Parse additional_info if it exists
+                    if poi_dict.get('additional_info'):
+                        try:
+                            additional_data = json.loads(poi_dict['additional_info'])
+                            # Merge additional data with main POI data
+                            poi_dict.update(additional_data)
+                        except:
+                            pass
+                    
+                    pois.append(poi_dict)
+                
+                return pois
+                
+        except Exception as e:
+            print(f"Error getting enhanced POIs: {e}")
+            return []
+
+    def get_poi_with_contact_info(self, route_id: str, poi_type: str) -> List[Dict]:
+        """Get POIs with contact information prioritized"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # First try to get from emergency_contacts table (better data)
+                cursor.execute("""
+                    SELECT 
+                        facility_name as name,
+                        latitude,
+                        longitude,
+                        formatted_address as address,
+                        formatted_phone_number as phone_number,
+                        international_phone_number,
+                        website,
+                        rating,
+                        place_id,
+                        distance_from_route
+                    FROM emergency_contacts 
+                    WHERE route_id = ? AND facility_type = ?
+                    ORDER BY rating DESC, distance_from_route ASC
+                """, (route_id, poi_type))
+                
+                emergency_contacts = [dict(row) for row in cursor.fetchall()]
+                
+                if emergency_contacts:
+                    return emergency_contacts
+                
+                # Fallback to regular POIs table
+                return self.get_enhanced_pois_by_type(route_id, poi_type)
+                
+        except Exception as e:
+            print(f"Error getting POI contact info: {e}")
+            return self.get_enhanced_pois_by_type(route_id, poi_type)
+
+    
