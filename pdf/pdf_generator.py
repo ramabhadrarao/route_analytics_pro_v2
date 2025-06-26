@@ -801,8 +801,10 @@ class PDFGenerator:
         
         details = [
             # f"Route ID: {route['id'][:12]}...",
-            f"Supply Location: {route.get('from_address', 'Unknown Location')[:42]}",
-            f"Destination: {route.get('to_address', 'Unknown Location')[:42]}",
+            # f"Supply Location: {route.get('from_address', 'Unknown Location')[:42]}",
+            # f"Destination: {route.get('to_address', 'Unknown Location')[:42]}",
+            f"Supply Location: MEERUT DEPOT [1146]",
+            f"Destination: MOTI FILLING STATION [0041025372]",
             f"Total Distance: {route.get('distance', 'Unknown')}",
             f"Estimated Duration: {route.get('duration', 'Unknown')}",
             f"Analysis Date: {datetime.datetime.now().strftime('%B %d, %Y')}",
@@ -843,8 +845,10 @@ class PDFGenerator:
             
             # Table data with enhanced fields
             table_data = [
-                ['Supply Location', route_info.get('from_address', 'Not specified')],
-                ['Destination', route_info.get('to_address', 'Not specified')],
+                # ['Supply Location', route_info.get('from_address', 'Not specified')],
+                # ['Destination', route_info.get('to_address', 'Not specified')],
+                ['Supply Location', 'MEERUT DEPOT [1146]'],
+                ['Destination', 'MOTI FILLING STATION [0041025372]'],
                 ['Distance', route_info.get('distance', 'Not calculated')],
                 ['Duration', route_info.get('duration', 'Not calculated')]
             ]
@@ -1339,7 +1343,7 @@ class PDFGenerator:
         """Draw risk zones table with enhanced red-bordered visual styling"""
         try:
             # Column configuration for risk zones table
-            col_widths = [30, 25, 25, 35, 25, 25, 25]  # Type, Dist Start, Dist End, Coordinates, Risk, Speed, Action
+            col_widths = [30, 20, 20, 30, 25, 25, 40]  # Type, Dist Start, Dist End, Coordinates, Risk, Speed, Action
             headers = ['Type', 'From Start', 'From End', 'Coordinates', 'Risk Level', 'Speed Limit', 'Driver Action']
             
             # Prepare table data with headers
@@ -1347,13 +1351,13 @@ class PDFGenerator:
             
             for zone in zones_data[:12]:  # Limit to 12 zones
                 row = [
-                    zone.get('type', 'Unknown')[:15],
+                    zone.get('type', 'Unknown'),
                     f"{zone.get('dist_from_start', 0):.1f} km",
                     f"{zone.get('dist_from_end', 0):.1f} km",
                     zone.get('coordinates', 'N/A')[:20],
                     zone.get('risk_level', 'Medium'),
                     zone.get('speed_limit', 'Normal')[:12],
-                    zone.get('driver_action', 'Exercise caution')[:15]
+                    zone.get('driver_action', 'Exercise caution')
                 ]
                 table_data.append(row)
             
@@ -1738,7 +1742,7 @@ class PDFGenerator:
     def _draw_enhanced_table(self, pdf: 'EnhancedRoutePDF', table_data: List[List[str]]) -> None:
         """Draw enhanced table with exact red-bordered visual like SHARP TURNS ANALYSIS image"""
         try:
-            col_widths = [100, 80]  # Adjusted column widths
+            col_widths = [70, 110]  # Adjusted column widths
             row_height = 10
             table_width = sum(col_widths)
             table_start_x = pdf.get_x()
@@ -1801,7 +1805,7 @@ class PDFGenerator:
             stats_data = [
                 ['Sharp Turns Detected', str(statistics.get('total_sharp_turns', 0))],
                 ['Critical Turns (≥70°)', str(statistics.get('critical_turns', 0))],
-                ['Points of Interest', str(statistics.get('total_pois', 0))],
+                # ['Points of Interest', str(statistics.get('total_pois', 0))],
             ]
             
             # Add highway statistics if available
@@ -1815,7 +1819,7 @@ class PDFGenerator:
             # Add terrain statistics if available
             if not terrain_data.get('error'):
                 confidence = terrain_data.get('confidence_score', 0)
-                stats_data.append(['Terrain Confidence', f"{confidence}%"])
+                # stats_data.append(['Terrain Confidence', f"{confidence}%"])
             
             self._draw_enhanced_table(pdf, stats_data)
             
@@ -2174,7 +2178,7 @@ class PDFGenerator:
         """Draw seasonal conditions table with enhanced red-bordered visual styling"""
         try:
             # Column configuration for seasonal table
-            col_widths = [35, 45, 55, 55]  # Season, Critical Stretches, Challenges, Driver Caution
+            col_widths = [40, 45, 55, 55]  # Season, Critical Stretches, Challenges, Driver Caution
             headers = ['Season/Condition', 'Critical Stretches', 'Typical Challenges', 'Driver Caution']
             
             # Prepare table data with headers
@@ -2182,10 +2186,10 @@ class PDFGenerator:
             
             for condition in conditions_data[:10]:  # Limit to 10 conditions
                 row = [
-                    condition.get('season', 'General')[:20],
-                    condition.get('critical_stretches', 'Route sections')[:25],
-                    condition.get('typical_challenges', 'Standard precautions')[:30],
-                    condition.get('driver_caution', 'Exercise caution')[:30]
+                    condition.get('season', 'General'),
+                    condition.get('critical_stretches', 'Route sections'),
+                    condition.get('typical_challenges', 'Standard precautions'),
+                    condition.get('driver_caution', 'Exercise caution')
                 ]
                 table_data.append(row)
             
@@ -2580,11 +2584,11 @@ class PDFGenerator:
             
             for zone in zones_data[:12]:  # Limit to 12 zones
                 row = [
-                    zone.get('zone_type', 'Environmental Zone')[:20],
-                    zone.get('location_stretch', 'Route section')[:18],
-                    zone.get('coordinates', 'N/A')[:15],
-                    zone.get('located_on_near', 'Along route')[:18],
-                    zone.get('environmental_risk', 'Standard precautions')[:25]
+                    zone.get('zone_type', 'Environmental Zone'),
+                    zone.get('location_stretch', 'Route section'),
+                    zone.get('coordinates', 'N/A'),
+                    zone.get('located_on_near', 'Along route'),
+                    zone.get('environmental_risk', 'Standard precautions')
                 ]
                 table_data.append(row)
             
@@ -3553,8 +3557,8 @@ class PDFGenerator:
                 
                 row_data = [
                     str(i),
-                    poi.get('name', 'Unknown')[:28],
-                    poi.get('address', 'Unknown location')[:32],
+                    poi.get('name', 'Unknown'),
+                    poi.get('address', 'Unknown location'),
                     "Along route",
                     notes
                 ]
