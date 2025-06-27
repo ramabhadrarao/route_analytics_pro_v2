@@ -289,19 +289,63 @@ class RouteAnalysisApp:
 
         # Also add this route to get enhanced overview data
         @self.app.route('/api/routes/<route_id>/enhanced-overview')
-        def route_enhanced_overview_api(route_id):
-            """Get enhanced route overview with highways and terrain"""
+        def route_enhanced_overview_with_map_data(route_id):
+            """Get enhanced route overview with map-ready data"""
             if 'logged_in' not in session:
                 return jsonify({'error': 'Not authenticated'}), 401
             
             try:
-                if self.route_api:
-                    return jsonify(self.route_api.get_enhanced_route_overview(route_id))
-                else:
-                    # Fallback to basic overview
-                    return jsonify(self.route_api.get_route_overview(route_id))
+                # Get basic enhanced overview
+                overview_data = self.route_api.get_enhanced_route_overview(route_id)
+                
+                if 'error' in overview_data:
+                    return jsonify(overview_data)
+                
+                # Add map-specific data
+                route_points = self.db_manager.get_route_points(route_id)
+                stored_images = self.db_manager.get_stored_images(route_id)
+                
+                # Calculate route bounds for map initialization
+                if route_points:
+                    latitudes = [p['latitude'] for p in route_points]
+                    longitudes = [p['longitude'] for p in route_points]
+                    
+                    overview_data['map_bounds'] = {
+                        'north': max(latitudes),
+                        'south': min(latitudes),
+                        'east': max(longitudes),
+                        'west': min(longitudes),
+                        'center': {
+                            'lat': sum(latitudes) / len(latitudes),
+                            'lng': sum(longitudes) / len(longitudes)
+                        }
+                    }
+                
+                # Add image availability
+                overview_data['available_images'] = {
+                    'street_view': len([img for img in stored_images if img.get('image_type') == 'street_view']),
+                    'satellite': len([img for img in stored_images if img.get('image_type') == 'satellite']),
+                    'route_maps': len([img for img in stored_images if img.get('image_type') == 'route_map']),
+                    'total': len(stored_images)
+                }
+                
+                return jsonify(overview_data)
+                
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
+        # Helper method for the class
+        def _calculate_recommended_animation_speed(self, point_count: int) -> int:
+            """Calculate recommended animation speed based on point count"""
+            if point_count <= 100:
+                return 8  # Fast for short routes
+            elif point_count <= 300:
+                return 5  # Medium speed
+            elif point_count <= 500:
+                return 3  # Slower for longer routes
+            else:
+                return 2  # Very slow for very long routes
+
+        # Update your existing live map route
         @self.app.route('/map/<route_id>')
         def live_route_map(route_id):
             """Display live interactive map for a specific route"""
@@ -314,7 +358,331 @@ class RouteAnalysisApp:
                 return render_template('error.html', 
                                     error_message=f'Route {route_id} not found'), 404
             
-            return render_template('live_map.html', route_id=route_id, route=route)
+            # Check if route has GPS points
+            route_points = self.db_manager.get_route_points(route_id)
+            if not route_points:
+                return render_template('error.html',
+                                    error_message=f'Route {route_id} has no GPS coordinates for map display'), 404
+            
+            # Get route statistics for initial display
+            route_stats = {
+                'total_points': len(route_points),
+                'has_pois': bool(self.db_manager.get_pois_by_type(route_id, 'hospital')),
+                'has_turns': bool(self.db_manager.get_sharp_turns(route_id)),
+                'has_network': bool(self.db_manager.get_network_coverage(route_id))
+            }
+            
+            return render_template('live_map.html', 
+                                route_id=route_id, 
+                                route=route,
+                                route_stats=route_stats)
+
+        # Add error handling for map-related errors
+        @self.app.errorhandler(404)
+        def not_found_error(error):
+            if request.path.startswith('/map/'):
+                return render_template('error.html', 
+                                    error_message='Route not found or invalid route ID'), 404
+            return render_template('error.html', 
+                                error_message='Page not found'), 404
+
+        @self.app.errorhandler(500)
+        def internal_error(error):
+            if request.path.startswith('/api/routes/'):
+                return jsonify({'error': 'Internal server error', 'map_ready': False}), 500
+            return render_template('error.html', 
+                                error_message='Internal server error'), 500
+
+        # Add route for testing map functionality
+        @self.app.route('/api/test-map/<route_id>')
+        def test_map_functionality(route_id):
+            """Test map functionality for a specific route"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            try:
+                test_results = {
+                    'route_exists': bool(self.db_manager.get_route(route_id)),
+                    'has_route_points': bool(self.db_manager.get_route_points(route_id)),
+                    'has_pois': bool(self.db_manager.get_pois_by_type(route_id, 'hospital')),
+                    'has_sharp_turns': bool(self.db_manager.get_sharp_turns(route_id)),
+                    'has_network_data': bool(self.db_manager.get_network_coverage(route_id)),
+                    'has_stored_images': bool(self.db_manager.get_stored_images(route_id)),
+                    'google_maps_api_key': bool(os.environ.get('GOOGLE_MAPS_API_KEY')),
+                    'database_accessible': True
+                }
+                
+                # Count available data
+                route_points = self.db_manager.get_route_points(route_id)
+                test_results['data_counts'] = {
+                    'route_points': len(route_points) if route_points else 0,
+                    'sharp_turns': len(self.db_manager.get_sharp_turns(route_id)),
+                    'pois': sum(len(self.db_manager.get_pois_by_type(route_id, poi_type)) 
+                            for poi_type in ['hospital', 'gas_station', 'police', 'fire_station']),
+                    'network_points': len(self.db_manager.get_network_coverage(route_id)),
+                    'stored_images': len(self.db_manager.get_stored_images(route_id))
+                }
+                
+                # Overall readiness
+                test_results['map_ready'] = (
+                    test_results['route_exists'] and 
+                    test_results['has_route_points'] and 
+                    test_results['google_maps_api_key']
+                )
+                
+                test_results['recommendations'] = []
+                if not test_results['has_route_points']:
+                    test_results['recommendations'].append('Upload and analyze a CSV file with GPS coordinates')
+                if not test_results['google_maps_api_key']:
+                    test_results['recommendations'].append('Configure GOOGLE_MAPS_API_KEY in environment variables')
+                if test_results['data_counts']['route_points'] < 10:
+                    test_results['recommendations'].append('Route has very few GPS points - map may not display properly')
+                
+                return jsonify(test_results)
+                
+            except Exception as e:
+                return jsonify({
+                    'error': str(e),
+                    'map_ready': False,
+                    'database_accessible': False
+                }), 500
+        # Update your existing route or add this new one
+        @self.app.route('/api/routes/<route_id>/complete-data')
+        def get_complete_route_data(route_id):
+            """Get all route data needed for interactive map in one call"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            try:
+                # Get all route data using the enhanced database methods
+                complete_data = self.db_manager.get_complete_route_data_for_map(route_id)
+                
+                if not complete_data:
+                    return jsonify({'error': 'Route not found or no data available'}), 404
+                
+                # Add additional API data
+                try:
+                    overview_data = self.route_api.get_enhanced_route_overview(route_id)
+                    pois_data = self.route_api.get_enhanced_points_of_interest(route_id)
+                    turns_data = self.route_api.get_sharp_turns(route_id)
+                    network_data = self.route_api.get_network_coverage(route_id)
+                    emergency_data = self.route_api.get_emergency_data(route_id)
+                    traffic_data = self.route_api.get_traffic_data(route_id)
+                    
+                    # Combine database and API data
+                    enhanced_data = {
+                        'overview': overview_data,
+                        'pois': pois_data,
+                        'turns': turns_data,
+                        'network': network_data,
+                        'emergency': emergency_data,
+                        'traffic': traffic_data,
+                        'database_data': complete_data,
+                        'map_ready': True,
+                        'api_status': 'success'
+                    }
+                    
+                    return jsonify(enhanced_data)
+                    
+                except Exception as api_error:
+                    print(f"API data error: {api_error}")
+                    # Return database data only if API fails
+                    complete_data['map_ready'] = True
+                    complete_data['api_status'] = 'partial'
+                    complete_data['api_error'] = str(api_error)
+                    return jsonify(complete_data)
+                
+            except Exception as e:
+                print(f"Complete data error: {e}")
+                return jsonify({'error': str(e), 'map_ready': False}), 500
+        @self.app.route('/api/routes/<route_id>/animation-points')
+        def get_animation_points(route_id):
+            """Get optimized route points for smooth animation"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            try:
+                # Get optimized points for animation
+                max_points = int(request.args.get('max_points', 500))
+                optimized_points = self.db_manager.get_optimized_route_points(route_id, max_points)
+                
+                if not optimized_points:
+                    return jsonify({'error': 'No route points found'}), 404
+                
+                # Get original count for comparison
+                all_points = self.db_manager.get_route_points(route_id)
+                original_count = len(all_points) if all_points else 0
+                
+                return jsonify({
+                    'route_points': optimized_points,
+                    'animation_points_count': len(optimized_points),
+                    'original_points_count': original_count,
+                    'optimization_ratio': len(optimized_points) / original_count if original_count > 0 else 0,
+                    'recommended_speed': self._calculate_recommended_animation_speed(len(optimized_points))
+                })
+                
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        @self.app.route('/api/routes/<route_id>/map-bounds')
+        def get_map_bounds(route_id):
+            """Get route bounds for map initialization"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            try:
+                bounds = self.db_manager.get_route_bounds(route_id)
+                
+                if not bounds:
+                    return jsonify({'error': 'No route bounds available'}), 404
+                
+                # Add recommended zoom level
+                lat_span = bounds['north'] - bounds['south']
+                lng_span = bounds['east'] - bounds['west']
+                max_span = max(lat_span, lng_span)
+                
+                if max_span <= 0.01:
+                    recommended_zoom = 15
+                elif max_span <= 0.05:
+                    recommended_zoom = 13
+                elif max_span <= 0.1:
+                    recommended_zoom = 12
+                elif max_span <= 0.5:
+                    recommended_zoom = 10
+                elif max_span <= 1.0:
+                    recommended_zoom = 9
+                else:
+                    recommended_zoom = 8
+                
+                bounds['recommended_zoom'] = recommended_zoom
+                bounds['span'] = {'lat': lat_span, 'lng': lng_span}
+                
+                return jsonify(bounds)
+                
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        @self.app.route('/api/routes/<route_id>/animation-data')
+        def get_animation_data(route_id):
+            """Get optimized route points for animation"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            try:
+                route_points = self.db_manager.get_route_points(route_id)
+                
+                if not route_points:
+                    return jsonify({'error': 'No route points found'}), 404
+                
+                # Optimize points for animation (sample every Nth point based on total)
+                total_points = len(route_points)
+                if total_points > 1000:
+                    step = total_points // 500  # Limit to ~500 points for smooth animation
+                    optimized_points = route_points[::step]
+                else:
+                    optimized_points = route_points
+                
+                return jsonify({
+                    'route_points': optimized_points,
+                    'total_original_points': total_points,
+                    'animation_points': len(optimized_points),
+                    'optimization_ratio': len(optimized_points) / total_points if total_points > 0 else 0
+                })
+                
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        @self.app.route('/api/routes/<route_id>/map-markers')
+        def get_map_markers_optimized(route_id):
+            """Get optimized markers data for map display"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            try:
+                markers_data = self.db_manager.get_map_markers_data(route_id)
+                
+                if not markers_data:
+                    return jsonify({'error': 'No marker data found'}), 404
+                
+                # Add summary statistics
+                markers_data['statistics'] = {
+                    'total_poi_markers': sum(len(pois) for pois in markers_data['pois'].values()),
+                    'sharp_turn_markers': len(markers_data['sharp_turns']),
+                    'network_issue_markers': len(markers_data['network_issues']),
+                    'emergency_service_markers': len(markers_data['emergency_services']),
+                    'traffic_incident_markers': len(markers_data['traffic_incidents']),
+                    'total_markers': (
+                        sum(len(pois) for pois in markers_data['pois'].values()) +
+                        len(markers_data['sharp_turns']) +
+                        len(markers_data['network_issues']) +
+                        len(markers_data['emergency_services']) +
+                        len(markers_data['traffic_incidents'])
+                    )
+                }
+                
+                return jsonify(markers_data)
+                
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/routes/<route_id>/gps-track/<float:lat>/<float:lng>')
+        def track_gps_position(route_id, lat, lng):
+            """Track current GPS position and find nearest route point"""
+            if 'logged_in' not in session:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
+            try:
+                route_points = self.db_manager.get_route_points(route_id)
+                
+                if not route_points:
+                    return jsonify({'error': 'No route points found'}), 404
+                
+                # Find nearest route point
+                min_distance = float('inf')
+                nearest_point = None
+                nearest_index = -1
+                
+                for i, point in enumerate(route_points):
+                    # Simple distance calculation (for more accuracy, use haversine formula)
+                    distance = ((lat - point['latitude'])**2 + (lng - point['longitude'])**2)**0.5
+                    if distance < min_distance:
+                        min_distance = distance
+                        nearest_point = point
+                        nearest_index = i
+                
+                # Calculate progress percentage
+                progress_percentage = (nearest_index / len(route_points)) * 100 if route_points else 0
+                
+                # Get nearby POIs (within 1km)
+                nearby_pois = []
+                try:
+                    poi_types = ['hospital', 'gas_station', 'police', 'fire_station']
+                    for poi_type in poi_types:
+                        pois = self.db_manager.get_enhanced_pois_by_type(route_id, poi_type)
+                        for poi in pois:
+                            if poi.get('latitude', 0) != 0 and poi.get('longitude', 0) != 0:
+                                poi_distance = ((lat - poi['latitude'])**2 + (lng - poi['longitude'])**2)**0.5
+                                if poi_distance < 0.01:  # Roughly 1km
+                                    nearby_pois.append({
+                                        'name': poi.get('name', 'Unknown'),
+                                        'type': poi_type,
+                                        'distance': poi_distance * 111,  # Convert to rough km
+                                        'phone': poi.get('phone_number', poi.get('formatted_phone_number', ''))
+                                    })
+                except:
+                    pass
+                
+                return jsonify({
+                    'current_position': {'lat': lat, 'lng': lng},
+                    'nearest_route_point': nearest_point,
+                    'route_progress': {
+                        'current_index': nearest_index,
+                        'total_points': len(route_points),
+                        'progress_percentage': round(progress_percentage, 2)
+                    },
+                    'nearby_pois': nearby_pois,
+                    'distance_to_route': round(min_distance * 111, 2)  # Rough km conversion
+                })
+                
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
     def run(self, debug=True, port=5000):
         """Run the Flask application"""
         print("\n🚀 Starting Fresh Route Analysis System...")

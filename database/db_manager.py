@@ -1019,5 +1019,285 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting POI contact info: {e}")
             return self.get_enhanced_pois_by_type(route_id, poi_type)
+    def get_complete_route_data_for_map(self, route_id: str) -> Dict[str, Any]:
+        """Get all route data optimized for map display"""
+        try:
+            result = {
+                'route_info': self.get_route(route_id),
+                'route_points': self.get_route_points(route_id),
+                'sharp_turns': self.get_sharp_turns(route_id),
+                'pois_by_type': {},
+                'network_coverage': self.get_network_coverage(route_id),
+                'emergency_contacts': self.get_emergency_contacts(route_id),
+                'traffic_data': [],
+                'stored_images': self.get_stored_images(route_id)
+            }
+            
+            # Get POIs by type with GPS coordinates
+            poi_types = ['hospital', 'gas_station', 'school', 'restaurant', 'police', 'fire_station']
+            for poi_type in poi_types:
+                pois = self.get_enhanced_pois_by_type(route_id, poi_type)
+                # Filter only POIs with valid GPS coordinates
+                valid_pois = [
+                    poi for poi in pois 
+                    if poi.get('latitude', 0) != 0 and poi.get('longitude', 0) != 0
+                ]
+                result['pois_by_type'][poi_type] = valid_pois
+            
+            # Get traffic data
+            try:
+                import sqlite3
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM traffic_data WHERE route_id = ?", (route_id,))
+                    result['traffic_data'] = [dict(row) for row in cursor.fetchall()]
+            except Exception as e:
+                print(f"Error getting traffic data: {e}")
+                result['traffic_data'] = []
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error getting complete route data: {e}")
+            return {}
+
+    def get_map_markers_data(self, route_id: str) -> Dict[str, Any]:
+        """Get optimized marker data for map display"""
+        try:
+            markers = {
+                'pois': {},
+                'sharp_turns': [],
+                'network_issues': [],
+                'emergency_services': [],
+                'traffic_incidents': [],
+                'environmental_risks': []
+            }
+            
+            # Get POIs with valid coordinates
+            poi_types = ['hospital', 'gas_station', 'school', 'restaurant', 'police', 'fire_station']
+            for poi_type in poi_types:
+                pois = self.get_enhanced_pois_by_type(route_id, poi_type)
+                valid_pois = []
+                for poi in pois:
+                    if poi.get('latitude', 0) != 0 and poi.get('longitude', 0) != 0:
+                        # Add map-specific data
+                        poi['marker_color'] = self._get_poi_marker_color(poi_type)
+                        poi['marker_icon'] = self._get_poi_marker_icon(poi_type)
+                        valid_pois.append(poi)
+                markers['pois'][poi_type] = valid_pois
+            
+            # Get sharp turns
+            sharp_turns = self.get_sharp_turns(route_id)
+            for turn in sharp_turns:
+                turn['marker_color'] = self._get_danger_color(turn.get('danger_level', 'LOW'))
+                turn['marker_icon'] = '⚠'
+            markers['sharp_turns'] = sharp_turns
+            
+            # Get network issues
+            network_coverage = self.get_network_coverage(route_id)
+            network_issues = []
+            for point in network_coverage:
+                if point.get('is_dead_zone') or point.get('is_poor_coverage'):
+                    point['marker_color'] = '#e83e8c' if point.get('is_dead_zone') else '#ffc107'
+                    point['marker_icon'] = '📵' if point.get('is_dead_zone') else '📶'
+                    network_issues.append(point)
+            markers['network_issues'] = network_issues
+            
+            # Get emergency services
+            emergency_contacts = self.get_emergency_contacts(route_id)
+            for contact in emergency_contacts:
+                contact['marker_color'] = self._get_emergency_color(contact.get('facility_type', ''))
+                contact['marker_icon'] = self._get_emergency_icon(contact.get('facility_type', ''))
+            markers['emergency_services'] = emergency_contacts
+            
+            # Get traffic incidents
+            try:
+                import sqlite3
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT * FROM traffic_data 
+                        WHERE route_id = ? AND congestion_level IN ('HEAVY', 'MODERATE')
+                    """, (route_id,))
+                    traffic_incidents = []
+                    for row in cursor.fetchall():
+                        incident = dict(row)
+                        incident['marker_color'] = self._get_traffic_color(incident.get('congestion_level', ''))
+                        incident['marker_icon'] = '🚦'
+                        traffic_incidents.append(incident)
+                    markers['traffic_incidents'] = traffic_incidents
+            except:
+                markers['traffic_incidents'] = []
+            
+            return markers
+            
+        except Exception as e:
+            print(f"Error getting map markers data: {e}")
+            return {}
+
+    def _get_poi_marker_color(self, poi_type: str) -> str:
+        """Get marker color for POI type"""
+        colors = {
+            'hospital': '#dc3545',
+            'gas_station': '#28a745',
+            'school': '#ffc107',
+            'restaurant': '#17a2b8',
+            'police': '#0052a3',
+            'fire_station': '#fd7e14'
+        }
+        return colors.get(poi_type, '#6c757d')
+
+    def _get_poi_marker_icon(self, poi_type: str) -> str:
+        """Get marker icon for POI type"""
+        icons = {
+            'hospital': '🏥',
+            'gas_station': '⛽',
+            'school': '🏫',
+            'restaurant': '🍽',
+            'police': '👮',
+            'fire_station': '🚒'
+        }
+        return icons.get(poi_type, '📍')
+
+    def _get_danger_color(self, danger_level: str) -> str:
+        """Get color for danger level"""
+        colors = {
+            'CRITICAL': '#dc3545',
+            'EXTREME': '#fd7e14',
+            'HIGH': '#ffc107',
+            'MEDIUM': '#28a745',
+            'LOW': '#17a2b8'
+        }
+        return colors.get(danger_level, '#6c757d')
+
+    def _get_emergency_color(self, facility_type: str) -> str:
+        """Get color for emergency facility type"""
+        colors = {
+            'hospital': '#dc3545',
+            'police': '#0052a3',
+            'fire_station': '#fd7e14',
+            'ambulance': '#dc3545',
+            'emergency_clinic': '#fd7e14'
+        }
+        return colors.get(facility_type, '#6f42c1')
+
+    def _get_emergency_icon(self, facility_type: str) -> str:
+        """Get icon for emergency facility type"""
+        icons = {
+            'hospital': '🏥',
+            'police': '👮',
+            'fire_station': '🚒',
+            'ambulance': '🚑',
+            'emergency_clinic': '⚕'
+        }
+        return icons.get(facility_type, '🚨')
+
+    def _get_traffic_color(self, congestion_level: str) -> str:
+        """Get color for traffic congestion level"""
+        colors = {
+            'HEAVY': '#dc3545',
+            'MODERATE': '#ffc107',
+            'LIGHT': '#28a745',
+            'FREE_FLOW': '#17a2b8'
+        }
+        return colors.get(congestion_level, '#6c757d')
+
+    def get_route_bounds(self, route_id: str) -> Optional[Dict]:
+        """Get route bounding box for map initialization"""
+        try:
+            route_points = self.get_route_points(route_id)
+            if not route_points:
+                return None
+            
+            latitudes = [p['latitude'] for p in route_points]
+            longitudes = [p['longitude'] for p in route_points]
+            
+            return {
+                'north': max(latitudes),
+                'south': min(latitudes),
+                'east': max(longitudes),
+                'west': min(longitudes),
+                'center': {
+                    'lat': sum(latitudes) / len(latitudes),
+                    'lng': sum(longitudes) / len(longitudes)
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error getting route bounds: {e}")
+            return None
+
+    def get_optimized_route_points(self, route_id: str, max_points: int = 500) -> List[Dict]:
+        """Get optimized route points for animation (sample if too many)"""
+        try:
+            route_points = self.get_route_points(route_id)
+            
+            if not route_points:
+                return []
+            
+            total_points = len(route_points)
+            if total_points <= max_points:
+                return route_points
+            
+            # Sample every nth point to reduce to max_points
+            step = total_points // max_points
+            optimized_points = route_points[::step]
+            
+            # Always include first and last points
+            if optimized_points[0] != route_points[0]:
+                optimized_points.insert(0, route_points[0])
+            if optimized_points[-1] != route_points[-1]:
+                optimized_points.append(route_points[-1])
+            
+            return optimized_points
+            
+        except Exception as e:
+            print(f"Error getting optimized route points: {e}")
+            return []
+
+    def store_route_analytics(self, route_id: str, analytics_data: Dict) -> bool:
+        """Store route analytics data for map performance tracking"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Create analytics table if it doesn't exist
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS route_analytics (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        route_id TEXT NOT NULL,
+                        map_loads INTEGER DEFAULT 0,
+                        animation_runs INTEGER DEFAULT 0,
+                        markers_displayed INTEGER DEFAULT 0,
+                        user_interactions INTEGER DEFAULT 0,
+                        last_accessed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        performance_data TEXT,
+                        FOREIGN KEY (route_id) REFERENCES routes (id)
+                    )
+                """)
+                
+                # Insert or update analytics
+                cursor.execute("""
+                    INSERT OR REPLACE INTO route_analytics 
+                    (route_id, map_loads, animation_runs, markers_displayed, 
+                    user_interactions, performance_data)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    route_id,
+                    analytics_data.get('map_loads', 0),
+                    analytics_data.get('animation_runs', 0),
+                    analytics_data.get('markers_displayed', 0),
+                    analytics_data.get('user_interactions', 0),
+                    json.dumps(analytics_data.get('performance_data', {}))
+                ))
+                
+                conn.commit()
+                return True
+                
+        except Exception as e:
+            print(f"Error storing route analytics: {e}")
+            return False
 
     

@@ -18,12 +18,18 @@
         }
         
         .map-container {
-            height: 70vh;
+            height: 75vh;
             width: 100%;
             border-radius: 15px;
             overflow: hidden;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             margin: 20px 0;
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
         }
         
         .poi-info-card {
@@ -33,75 +39,8 @@
             margin-bottom: 15px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.08);
             border-left: 4px solid #0052a3;
-        }
-        
-        .poi-category {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-        
-        .poi-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 15px;
-            color: white;
-            font-size: 18px;
-        }
-        
-        .hospital-icon { background: #dc3545; }
-        .police-icon { background: #0052a3; }
-        .fire-icon { background: #fd7e14; }
-        .gas-icon { background: #28a745; }
-        .school-icon { background: #ffc107; color: #000; }
-        .restaurant-icon { background: #17a2b8; }
-        
-        .contact-info {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-top: 10px;
-        }
-        
-        .contact-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 0.9rem;
-        }
-        
-        .distance-badge {
-            background: #e9ecef;
-            color: #495057;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-        
-        .phone-link {
-            color: #28a745;
-            text-decoration: none;
-        }
-        
-        .phone-link:hover {
-            text-decoration: underline;
-        }
-        
-        .map-link {
-            color: #0052a3;
-            text-decoration: none;
-        }
-        
-        .map-link:hover {
-            text-decoration: underline;
+            max-height: 75vh;
+            overflow-y: auto;
         }
         
         .route-info {
@@ -114,7 +53,7 @@
         
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 15px;
             margin: 20px 0;
         }
@@ -128,14 +67,151 @@
         }
         
         .stat-number {
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: bold;
             color: #0052a3;
         }
         
         .stat-label {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: #6c757d;
+        }
+        
+        .map-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .control-btn {
+            background: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 40px;
+            height: 40px;
+        }
+        
+        .control-btn:hover {
+            background: #f8f9fa;
+            transform: translateY(-1px);
+        }
+        
+        .control-btn.active {
+            background: #0052a3;
+            color: white;
+        }
+        
+        .animation-controls {
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            min-width: 250px;
+        }
+        
+        .progress-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            min-width: 300px;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            border-radius: 15px;
+        }
+        
+        .poi-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 4px solid #0052a3;
+        }
+        
+        .poi-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            margin-right: 8px;
+        }
+        
+        .hospital-icon { background: #dc3545; }
+        .police-icon { background: #0052a3; }
+        .fire-icon { background: #fd7e14; }
+        .gas-icon { background: #28a745; }
+        .school-icon { background: #ffc107; color: #000; }
+        .restaurant-icon { background: #17a2b8; }
+        
+        .legend {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .legend-marker {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+        }
+        
+        .gps-tracker {
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            font-size: 0.8rem;
+            max-width: 200px;
         }
     </style>
 </head>
@@ -154,20 +230,23 @@
         </div>
     </nav>
 
-    <div class="container mt-4">
+    <div class="container-fluid mt-4">
         <!-- Route Information Header -->
         <div class="route-info">
             <div class="row align-items-center">
                 <div class="col-md-8">
                     <h3><i class="fas fa-map-marked-alt me-2"></i>Live Interactive Route Map</h3>
-                    <p class="mb-0" id="routeDetails">Route ID: {{ route_id if route_id else 'Loading...' }}</p>
+                    <p class="mb-0" id="routeDetails">Loading route information...</p>
                 </div>
                 <div class="col-md-4 text-end">
-                    <button class="btn btn-light btn-sm" onclick="centerMap()">
-                        <i class="fas fa-crosshairs me-1"></i>Center Map
+                    <button class="btn btn-light btn-sm me-2" onclick="centerMapOnRoute()" title="Center map on route">
+                        <i class="fas fa-crosshairs me-1"></i>Center
                     </button>
-                    <button class="btn btn-light btn-sm" onclick="togglePOIs()">
-                        <i class="fas fa-eye me-1"></i>Toggle POIs
+                    <button class="btn btn-light btn-sm me-2" onclick="startAnimation()" title="Start route animation">
+                        <i class="fas fa-play me-1"></i>Animate
+                    </button>
+                    <button class="btn btn-light btn-sm" onclick="toggleTraffic()" title="Toggle traffic layer">
+                        <i class="fas fa-traffic-light me-1"></i>Traffic
                     </button>
                 </div>
             </div>
@@ -184,40 +263,146 @@
                 <div class="stat-label">Emergency Services</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number" id="fuelStations">-</div>
-                <div class="stat-label">Fuel Stations</div>
+                <div class="stat-number" id="sharpTurns">-</div>
+                <div class="stat-label">Sharp Turns</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number" id="phoneContacts">-</div>
-                <div class="stat-label">With Phone Numbers</div>
+                <div class="stat-number" id="routePoints">-</div>
+                <div class="stat-label">GPS Points</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="networkIssues">-</div>
+                <div class="stat-label">Network Issues</div>
             </div>
         </div>
 
-        <!-- Interactive Map -->
+        <!-- Main Content -->
         <div class="row">
+            <!-- Interactive Map -->
             <div class="col-lg-8">
                 <div class="map-container">
-                    <iframe id="mapFrame" 
-                            src="about:blank" 
-                            width="100%" 
-                            height="100%" 
-                            frameborder="0" 
-                            style="border:0;" 
-                            allowfullscreen="" 
-                            aria-hidden="false" 
-                            tabindex="0">
-                    </iframe>
+                    <div class="loading-overlay" id="mapLoading">
+                        <div class="text-center">
+                            <i class="fas fa-spinner fa-spin fa-3x text-primary mb-3"></i>
+                            <h5>Loading Interactive Map...</h5>
+                            <p class="text-muted">Fetching route data and initializing Google Maps</p>
+                        </div>
+                    </div>
+                    
+                    <div id="map"></div>
+                    
+                    <!-- Map Controls -->
+                    <div class="map-controls">
+                        <button class="control-btn active" title="Toggle POI Markers" onclick="togglePOIMarkers()">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </button>
+                        <button class="control-btn active" title="Toggle Sharp Turns" onclick="toggleSharpTurns()">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </button>
+                        <button class="control-btn" title="Toggle Network Coverage" onclick="toggleNetworkCoverage()">
+                            <i class="fas fa-wifi"></i>
+                        </button>
+                        <button class="control-btn" title="Toggle Emergency Services" onclick="toggleEmergencyServices()">
+                            <i class="fas fa-ambulance"></i>
+                        </button>
+                        <button class="control-btn" title="Satellite View" onclick="toggleMapType()">
+                            <i class="fas fa-satellite"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- GPS Tracker Display -->
+                    <div class="gps-tracker" id="gpsTracker" style="display: none;">
+                        <div><strong>GPS Tracking</strong></div>
+                        <div id="gpsPosition">Lat: -, Lng: -</div>
+                        <div id="routeProgress">Progress: 0%</div>
+                    </div>
+                    
+                    <!-- Animation Controls -->
+                    <div class="animation-controls" id="animationControls" style="display: none;">
+                        <h6><i class="fas fa-play-circle me-2"></i>Route Animation</h6>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <button class="btn btn-primary btn-sm" onclick="startAnimation()" id="playBtn">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="pauseAnimation()">
+                                <i class="fas fa-pause"></i>
+                            </button>
+                            <button class="btn btn-warning btn-sm" onclick="resetAnimation()">
+                                <i class="fas fa-stop"></i>
+                            </button>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <small>Speed:</small>
+                            <input type="range" class="form-range flex-grow-1" id="speedControl" min="1" max="10" value="5">
+                            <small id="speedDisplay">5x</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Indicator -->
+                    <div class="progress-indicator" id="progressIndicator" style="display: none;">
+                        <h6><i class="fas fa-route me-2"></i>Journey Progress</h6>
+                        <div class="progress mb-2">
+                            <div class="progress-bar" id="journeyProgress" style="width: 0%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <small id="progressText">Ready to start</small>
+                            <small id="progressStats">0 / 0 points</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Map Legend -->
+                <div class="legend">
+                    <h6><i class="fas fa-info-circle me-2"></i>Map Legend</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="legend-item">
+                                <div class="legend-marker hospital-icon">+</div>
+                                <span>Hospitals & Medical</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-marker police-icon">🛡</div>
+                                <span>Police Stations</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-marker fire-icon">🔥</div>
+                                <span>Fire Stations</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-marker gas-icon">⛽</div>
+                                <span>Fuel Stations</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="legend-item">
+                                <div class="legend-marker" style="background: #6f42c1;">⚠</div>
+                                <span>Sharp Turns</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-marker" style="background: #e83e8c;">📵</div>
+                                <span>Network Dead Zones</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-marker" style="background: #28a745;">S</div>
+                                <span>Route Start</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-marker" style="background: #dc3545;">E</div>
+                                <span>Route End</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <!-- POI Information Panel -->
+            <!-- Information Panel -->
             <div class="col-lg-4">
                 <div class="poi-info-card">
-                    <h5><i class="fas fa-info-circle me-2"></i>Points of Interest</h5>
-                    <div id="poiList">
+                    <h5><i class="fas fa-info-circle me-2"></i>Route Information</h5>
+                    <div id="routeInfoPanel">
                         <div class="text-center py-3">
                             <i class="fas fa-spinner fa-spin"></i>
-                            <small class="text-muted d-block">Loading POI data...</small>
+                            <small class="text-muted d-block">Loading route data...</small>
                         </div>
                     </div>
                 </div>
@@ -227,17 +412,48 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
     <script>
+        // Global variables
+        let map = null;
         let routeData = null;
-        let poisVisible = true;
+        let allMarkers = [];
+        let routePath = null;
+        let animationMarker = null;
+        let animationInterval = null;
+        let currentAnimationStep = 0;
+        let isAnimating = false;
+        let trafficLayer = null;
+        let markerGroups = {
+            pois: [],
+            sharpTurns: [],
+            networkIssues: [],
+            emergencyServices: [],
+            trafficIncidents: []
+        };
+        
+        // Map configuration - Using your actual API key from .env
+        const GOOGLE_MAPS_API_KEY = 'AIzaSyAXa6qLmUm7YEoUOqpIZF8A00663AKgq68';
         
         $(document).ready(function() {
             const routeId = getRouteIdFromUrl();
             if (routeId) {
-                loadRouteData(routeId);
+                loadGoogleMaps().then(() => {
+                    loadCompleteRouteData(routeId);
+                });
             } else {
                 showError('No route ID provided');
             }
+            
+            // Setup speed control
+            $('#speedControl').on('input', function() {
+                const speed = $(this).val();
+                $('#speedDisplay').text(speed + 'x');
+                if (isAnimating) {
+                    pauseAnimation();
+                    startAnimation();
+                }
+            });
         });
         
         function getRouteIdFromUrl() {
@@ -246,456 +462,782 @@
             return segments[segments.length - 1];
         }
         
-        function loadRouteData(routeId) {
-            $.ajax({
-                url: `/api/routes/${routeId}/enhanced-overview`,
-                method: 'GET',
-                success: function(response) {
-                    routeData = response;
-                    displayRouteInfo(response);
-                    loadPOIData(routeId);
-                    initializeMap(response);
-                },
-                error: function() {
-                    showError('Failed to load route data');
+        function loadGoogleMaps() {
+            return new Promise((resolve, reject) => {
+                if (window.google && window.google.maps) {
+                    resolve();
+                    return;
                 }
+                
+                window.initMap = resolve; // Callback for Google Maps
+                
+                const script = document.createElement('script');
+                script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=geometry&callback=initMap`;
+                script.onerror = reject;
+                document.head.appendChild(script);
             });
         }
         
-        function displayRouteInfo(data) {
-            const route = data.route_info || {};
-            $('#routeDetails').html(`
-                <strong>${route.from_address || 'Unknown'}</strong> → 
-                <strong>${route.to_address || 'Unknown'}</strong><br>
-                <small>Distance: ${route.distance || 'N/A'} | Duration: ${route.duration || 'N/A'}</small>
-            `);
-        }
-        
-        function loadPOIData(routeId) {
+        function loadCompleteRouteData(routeId) {
+            // Use the new complete data endpoint
             $.ajax({
-                url: `/api/routes/${routeId}/pois`,
+                url: `/api/routes/${routeId}/complete-data`,
                 method: 'GET',
-                success: function(response) {
-                    displayPOIStats(response.statistics);
-                    displayPOIList(response.pois_by_type);
-                },
-                error: function() {
-                    $('#poiList').html('<div class="text-danger">Failed to load POI data</div>');
-                }
-            });
-        }
-        
-        function displayPOIStats(stats) {
-            $('#totalPOIs').text(stats.total_pois || 0);
-            $('#emergencyServices').text(stats.emergency_services || 0);
-            $('#fuelStations').text(stats.essential_services || 0);
-            $('#phoneContacts').text(stats.pois_with_phone || 0);
-        }
-        
-        function displayPOIList(poisByType) {
-            let html = '';
-            
-            const categories = [
-                { key: 'hospitals', name: 'Medical Facilities', icon: 'fas fa-hospital-alt', class: 'hospital-icon' },
-                { key: 'police', name: 'Police Stations', icon: 'fas fa-shield-alt', class: 'police-icon' },
-                { key: 'fire_stations', name: 'Fire Stations', icon: 'fas fa-fire-extinguisher', class: 'fire-icon' },
-                { key: 'gas_stations', name: 'Fuel Stations', icon: 'fas fa-gas-pump', class: 'gas-icon' },
-                { key: 'schools', name: 'Schools', icon: 'fas fa-school', class: 'school-icon' },
-                { key: 'restaurants', name: 'Restaurants', icon: 'fas fa-utensils', class: 'restaurant-icon' }
-            ];
-            
-            categories.forEach(category => {
-                const pois = poisByType[category.key] || [];
-                if (pois.length > 0) {
-                    html += `
-                        <div class="poi-category">
-                            <div class="poi-icon ${category.class}">
-                                <i class="${category.icon}"></i>
-                            </div>
-                            <div>
-                                <strong>${category.name}</strong>
-                                <small class="d-block text-muted">${pois.length} facilities found</small>
-                            </div>
-                        </div>
-                    `;
+                success: function(data) {
+                    routeData = data;
+                    console.log('Complete route data loaded:', routeData);
                     
-                    // Show top 3 facilities per category
-                    pois.slice(0, 3).forEach(poi => {
-                        const distanceFromStart = calculateDistance(poi, routeData?.route_points?.[0]);
-                        const distanceFromEnd = calculateDistance(poi, routeData?.route_points?.[routeData.route_points.length - 1]);
-                        
-                        html += `
-                            <div class="mb-3 p-2 border-start border-3" style="border-color: ${getCategoryColor(category.key)}!important;">
-                                <div class="fw-bold">${poi.name || 'Unknown Facility'}</div>
-                                <div class="text-muted small mb-2">${poi.address || 'Address not available'}</div>
-                                
-                                <div class="contact-info">
-                                    ${poi.phone_number || poi.formatted_phone_number ? 
-                                        `<div class="contact-item">
-                                            <i class="fas fa-phone text-success"></i>
-                                            <a href="tel:${poi.phone_number || poi.formatted_phone_number}" class="phone-link">
-                                                ${poi.phone_number || poi.formatted_phone_number}
-                                            </a>
-                                        </div>` : 
-                                        '<div class="contact-item"><i class="fas fa-phone-slash text-muted"></i><span class="text-muted">No phone</span></div>'
-                                    }
-                                    
-                                    ${poi.latitude && poi.longitude && poi.latitude != 0 && poi.longitude != 0 ? 
-                                        `<div class="contact-item">
-                                            <i class="fas fa-map-marker-alt text-primary"></i>
-                                            <a href="https://maps.google.com/maps?q=${poi.latitude},${poi.longitude}" 
-                                               target="_blank" class="map-link">
-                                                View on Map
-                                            </a>
-                                        </div>` : 
-                                        '<div class="contact-item"><i class="fas fa-map-marker-slash text-muted"></i><span class="text-muted">No GPS</span></div>'
-                                    }
-                                </div>
-                                
-                                <div class="mt-2">
-                                    ${distanceFromStart !== 'N/A' ? `<span class="distance-badge me-1">Start: ${distanceFromStart}</span>` : ''}
-                                    ${distanceFromEnd !== 'N/A' ? `<span class="distance-badge">End: ${distanceFromEnd}</span>` : ''}
-                                    ${poi.rating ? `<span class="distance-badge ms-1">★ ${poi.rating}</span>` : ''}
-                                </div>
-                            </div>
-                        `;
-                    });
-                    
-                    if (pois.length > 3) {
-                        html += `<div class="text-center mb-3">
-                                    <small class="text-muted">... and ${pois.length - 3} more ${category.name.toLowerCase()}</small>
-                                </div>`;
+                    if (routeData.overview && routeData.overview.route_points) {
+                        initializeMap();
+                        displayRouteInfo();
+                        displayStatistics();
+                    } else {
+                        showError('No route points available for map display');
                     }
+                    
+                    $('#mapLoading').hide();
+                },
+                error: function(xhr) {
+                    console.error('Failed to load route data:', xhr);
+                    showError('Failed to load route data: ' + (xhr.responseJSON?.error || 'Unknown error'));
+                    $('#mapLoading').hide();
                 }
             });
-            
-            $('#poiList').html(html || '<div class="text-center text-muted">No POIs found for this route</div>');
         }
         
-        function getCategoryColor(category) {
-            const colors = {
-                'hospitals': '#dc3545',
-                'police': '#0052a3', 
-                'fire_stations': '#fd7e14',
-                'gas_stations': '#28a745',
-                'schools': '#ffc107',
-                'restaurants': '#17a2b8'
-            };
-            return colors[category] || '#6c757d';
-        }
-        
-        function calculateDistance(poi, referencePoint) {
-            try {
-                if (!referencePoint || !poi.latitude || !poi.longitude || poi.latitude == 0 || poi.longitude == 0) {
-                    return 'N/A';
-                }
-                
-                const R = 6371; // Earth's radius in kilometers
-                const lat1 = parseFloat(poi.latitude) * Math.PI / 180;
-                const lat2 = parseFloat(referencePoint.latitude) * Math.PI / 180;
-                const deltaLat = (parseFloat(referencePoint.latitude) - parseFloat(poi.latitude)) * Math.PI / 180;
-                const deltaLng = (parseFloat(referencePoint.longitude) - parseFloat(poi.longitude)) * Math.PI / 180;
-                
-                const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
-                         Math.cos(lat1) * Math.cos(lat2) *
-                         Math.sin(deltaLng/2) * Math.sin(deltaLng/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                const distance = R * c;
-                
-                return `${distance.toFixed(1)} km`;
-            } catch (e) {
-                return 'N/A';
-            }
-        }
-        
-        function initializeMap(routeData) {
-            if (!routeData.route_points || routeData.route_points.length === 0) {
-                $('#mapFrame').attr('src', 'data:text/html,<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:Arial;">No route data available for map display</div>');
+        function initializeMap() {
+            const routePoints = routeData.overview.route_points;
+            if (!routePoints || routePoints.length === 0) {
+                showError('Route has no GPS points');
                 return;
             }
             
-            // Calculate map center and bounds
-            const points = routeData.route_points;
-            const centerLat = points.reduce((sum, p) => sum + p.latitude, 0) / points.length;
-            const centerLng = points.reduce((sum, p) => sum + p.longitude, 0) / points.length;
+            // Calculate map center
+            const centerLat = routePoints.reduce((sum, p) => sum + p.latitude, 0) / routePoints.length;
+            const centerLng = routePoints.reduce((sum, p) => sum + p.longitude, 0) / routePoints.length;
             
-            // Calculate map bounds
-            const latitudes = points.map(p => p.latitude);
-            const longitudes = points.map(p => p.longitude);
-            const minLat = Math.min(...latitudes);
-            const maxLat = Math.max(...latitudes);
-            const minLng = Math.min(...longitudes);
-            const maxLng = Math.max(...longitudes);
+            // Initialize Google Map
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 12,
+                center: { lat: centerLat, lng: centerLng },
+                mapTypeId: google.maps.MapTypeId.ROADMAP,
+                styles: [
+                    {
+                        featureType: "poi",
+                        elementType: "labels",
+                        stylers: [{ visibility: "off" }]
+                    }
+                ]
+            });
             
-            // Sample route points for display (every 10th point to avoid too many markers)
-            const samplePoints = points.filter((point, index) => index % Math.max(1, Math.floor(points.length / 20)) === 0);
+            // Initialize traffic layer
+            trafficLayer = new google.maps.TrafficLayer();
             
-            // Create route path string for Google Maps
-            const routePath = samplePoints.map(p => `${p.latitude},${p.longitude}`).join('|');
+            // Draw route path
+            drawRoutePath(routePoints);
             
-            // Generate Google Maps URL with route path
-            const startPoint = `${points[0].latitude},${points[0].longitude}`;
-            const endPoint = `${points[points.length-1].latitude},${points[points.length-1].longitude}`;
+            // Add all markers
+            addAllMarkers();
             
-            // Create comprehensive Google Maps URL with route
-            const googleMapsUrl = `https://www.google.com/maps/dir/${startPoint}/${endPoint}/@${centerLat},${centerLng},12z/data=!3m1!4b1!4m2!4m1!3e0`;
+            // Fit map to show all route points
+            fitMapToRoute(routePoints);
             
-            // Create an enhanced HTML page with multiple map options
-            const mapHtml = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Interactive Route Map</title>
-                    <style>
-                        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #f8f9fa; }
-                        .map-container { 
-                            background: white; 
-                            border-radius: 15px; 
-                            padding: 20px;
-                            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-                            margin-bottom: 20px;
-                        }
-                        .map-info { margin-bottom: 20px; }
-                        .coordinates { 
-                            background: #e3f2fd; 
-                            padding: 15px; 
-                            border-radius: 8px; 
-                            font-family: monospace; 
-                            font-size: 12px;
-                            margin: 15px 0;
-                            border-left: 4px solid #2196f3;
-                        }
-                        .route-stats {
-                            display: grid;
-                            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                            gap: 15px;
-                            margin: 20px 0;
-                        }
-                        .stat-card {
-                            background: #f8f9fa;
-                            padding: 15px;
-                            border-radius: 8px;
-                            text-align: center;
-                            border: 1px solid #dee2e6;
-                        }
-                        .stat-number {
-                            font-size: 1.8rem;
-                            font-weight: bold;
-                            color: #0052a3;
-                        }
-                        .stat-label {
-                            font-size: 0.9rem;
-                            color: #6c757d;
-                            margin-top: 5px;
-                        }
-                        .external-link {
-                            display: inline-block;
-                            background: linear-gradient(45deg, #0052a3, #004080);
-                            color: white;
-                            padding: 12px 24px;
-                            text-decoration: none;
-                            border-radius: 8px;
-                            margin: 10px 5px;
-                            font-weight: 500;
-                            transition: transform 0.2s ease;
-                        }
-                        .external-link:hover {
-                            transform: translateY(-2px);
-                            background: linear-gradient(45deg, #004080, #0052a3);
-                            color: white;
-                        }
-                        .route-features {
-                            background: #fff3cd;
-                            border: 1px solid #ffeaa7;
-                            border-radius: 8px;
-                            padding: 20px;
-                            margin: 20px 0;
-                        }
-                        .feature-list {
-                            display: grid;
-                            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                            gap: 10px;
-                            margin-top: 15px;
-                        }
-                        .feature-item {
-                            display: flex;
-                            align-items: center;
-                            padding: 8px;
-                            background: white;
-                            border-radius: 6px;
-                            border-left: 3px solid #0052a3;
-                        }
-                        .feature-icon {
-                            margin-right: 10px;
-                            font-size: 1.2rem;
-                        }
-                        .map-preview {
-                            width: 100%;
-                            height: 400px;
-                            border: 2px solid #0052a3;
-                            border-radius: 10px;
-                            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            flex-direction: column;
-                            color: #0052a3;
-                            font-size: 1.1rem;
-                            text-align: center;
-                            margin: 20px 0;
-                        }
-                        .route-path-info {
-                            background: #e8f5e8;
-                            padding: 15px;
-                            border-radius: 8px;
-                            border-left: 4px solid #4caf50;
-                            margin: 15px 0;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="map-container">
-                        <div class="map-info">
-                            <h2>🗺️ Live Interactive Route Map</h2>
-                            <p><strong>Route:</strong> ${routeData.route_info?.from_address || 'Unknown'} → ${routeData.route_info?.to_address || 'Unknown'}</p>
-                            
-                            <div class="route-stats">
-                                <div class="stat-card">
-                                    <div class="stat-number">${points.length}</div>
-                                    <div class="stat-label">GPS Points</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-number">${routeData.route_info?.distance || 'N/A'}</div>
-                                    <div class="stat-label">Total Distance</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-number">${routeData.route_info?.duration || 'N/A'}</div>
-                                    <div class="stat-label">Estimated Time</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-number">${samplePoints.length}</div>
-                                    <div class="stat-label">Route Markers</div>
-                                </div>
+            // Setup controls
+            $('#animationControls').show();
+            $('#progressIndicator').show();
+            
+            console.log('Map initialized successfully');
+        }
+        
+        function drawRoutePath(routePoints) {
+            const pathCoordinates = routePoints.map(point => ({
+                lat: point.latitude,
+                lng: point.longitude
+            }));
+            
+            // Main route path
+            routePath = new google.maps.Polyline({
+                path: pathCoordinates,
+                geodesic: true,
+                strokeColor: '#0052a3',
+                strokeOpacity: 0.8,
+                strokeWeight: 4
+            });
+            routePath.setMap(map);
+            
+            // Start marker
+            new google.maps.Marker({
+                position: pathCoordinates[0],
+                map: map,
+                title: 'Route Start',
+                icon: createCustomIcon('#28a745', 'S', 30)
+            });
+            
+            // End marker
+            new google.maps.Marker({
+                position: pathCoordinates[pathCoordinates.length - 1],
+                map: map,
+                title: 'Route End',
+                icon: createCustomIcon('#dc3545', 'E', 30)
+            });
+        }
+        
+        function createCustomIcon(color, text, size = 24) {
+            return {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size + 6}" viewBox="0 0 ${size} ${size + 6}">
+                        <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="${color}" stroke="white" stroke-width="2"/>
+                        <text x="${size/2}" y="${size/2 + 4}" text-anchor="middle" font-family="Arial" font-size="${size/2}" font-weight="bold" fill="white">${text}</text>
+                    </svg>
+                `),
+                scaledSize: new google.maps.Size(size, size + 6),
+                anchor: new google.maps.Point(size/2, size/2 + 3)
+            };
+        }
+        
+        function addAllMarkers() {
+            // Clear existing markers
+            clearAllMarkers();
+            
+            // Add POI markers
+            addPOIMarkers();
+            
+            // Add sharp turn markers
+            addSharpTurnMarkers();
+            
+            // Add network issue markers
+            addNetworkIssueMarkers();
+            
+            // Add emergency service markers
+            addEmergencyServiceMarkers();
+            
+            // Add traffic incident markers
+            addTrafficIncidentMarkers();
+        }
+        
+        function addPOIMarkers() {
+            if (!routeData.pois || !routeData.pois.pois_by_type) return;
+            
+            const poisByType = routeData.pois.pois_by_type;
+            const iconMap = {
+                'hospitals': { color: '#dc3545', text: '+' },
+                'police': { color: '#0052a3', text: '🛡' },
+                'fire_stations': { color: '#fd7e14', text: '🔥' },
+                'gas_stations': { color: '#28a745', text: '⛽' },
+                'schools': { color: '#ffc107', text: '🏫' },
+                'restaurants': { color: '#17a2b8', text: '🍽' }
+            };
+            
+            Object.keys(poisByType).forEach(poiType => {
+                const pois = poisByType[poiType];
+                const config = iconMap[poiType] || { color: '#6c757d', text: '📍' };
+                
+                pois.forEach(poi => {
+                    if (poi.latitude && poi.longitude && poi.latitude !== 0 && poi.longitude !== 0) {
+                        const marker = new google.maps.Marker({
+                            position: { lat: poi.latitude, lng: poi.longitude },
+                            map: map,
+                            title: poi.name || 'POI',
+                            icon: createCustomIcon(config.color, config.text)
+                        });
+                        
+                        // Add info window
+                        const infoWindow = new google.maps.InfoWindow({
+                            content: createPOIInfoContent(poi, poiType)
+                        });
+                        
+                        marker.addListener('click', () => {
+                            infoWindow.open(map, marker);
+                        });
+                        
+                        marker.category = 'poi';
+                        marker.subCategory = poiType;
+                        markerGroups.pois.push(marker);
+                        allMarkers.push(marker);
+                    }
+                });
+            });
+        }
+        
+        function addSharpTurnMarkers() {
+            if (!routeData.turns || !routeData.turns.categorized_turns) return;
+            
+            const allTurns = [
+                ...(routeData.turns.categorized_turns.extreme_blind_spots || []),
+                ...(routeData.turns.categorized_turns.blind_spots || []),
+                ...(routeData.turns.categorized_turns.sharp_danger || []),
+                ...(routeData.turns.categorized_turns.moderate_turns || [])
+            ];
+            
+            allTurns.forEach(turn => {
+                const marker = new google.maps.Marker({
+                    position: { lat: turn.latitude, lng: turn.longitude },
+                    map: map,
+                    title: `Sharp Turn (${turn.angle}°)`,
+                    icon: createCustomIcon('#6f42c1', '⚠')
+                });
+                
+                const infoWindow = new google.maps.InfoWindow({
+                    content: createTurnInfoContent(turn)
+                });
+                
+                marker.addListener('click', () => {
+                    infoWindow.open(map, marker);
+                });
+                
+                marker.category = 'sharpTurn';
+                markerGroups.sharpTurns.push(marker);
+                allMarkers.push(marker);
+            });
+        }
+        
+        function addNetworkIssueMarkers() {
+            if (!routeData.network || !routeData.network.problem_areas) return;
+            
+            const issues = [
+                ...(routeData.network.problem_areas.dead_zones || []),
+                ...(routeData.network.problem_areas.poor_coverage_zones || [])
+            ];
+            
+            issues.forEach(issue => {
+                const marker = new google.maps.Marker({
+                    position: { lat: issue.latitude, lng: issue.longitude },
+                    map: map,
+                    title: `Network ${issue.is_dead_zone ? 'Dead' : 'Poor'} Zone`,
+                    icon: createCustomIcon('#e83e8c', '📵')
+                });
+                
+                const infoWindow = new google.maps.InfoWindow({
+                    content: createNetworkInfoContent(issue)
+                });
+                
+                marker.addListener('click', () => {
+                    infoWindow.open(map, marker);
+                });
+                
+                marker.category = 'networkIssue';
+                markerGroups.networkIssues.push(marker);
+                allMarkers.push(marker);
+            });
+        }
+        
+        function addEmergencyServiceMarkers() {
+            if (!routeData.emergency || !routeData.emergency.emergency_services) return;
+            
+            const emergencyServices = routeData.emergency.emergency_services;
+            const serviceIcons = {
+                'hospitals': { color: '#dc3545', text: '🏥' },
+                'police_stations': { color: '#0052a3', text: '👮' },
+                'fire_stations': { color: '#fd7e14', text: '🚒' }
+            };
+            
+            Object.keys(emergencyServices).forEach(serviceType => {
+                const services = emergencyServices[serviceType];
+                const config = serviceIcons[serviceType] || { color: '#6f42c1', text: '🚨' };
+                
+                services.forEach(service => {
+                    if (service.latitude && service.longitude && service.latitude !== 0 && service.longitude !== 0) {
+                        const marker = new google.maps.Marker({
+                            position: { lat: service.latitude, lng: service.longitude },
+                            map: map,
+                            title: service.name || 'Emergency Service',
+                            icon: createCustomIcon(config.color, config.text)
+                        });
+                        
+                        const infoWindow = new google.maps.InfoWindow({
+                            content: createEmergencyInfoContent(service, serviceType)
+                        });
+                        
+                        marker.addListener('click', () => {
+                            infoWindow.open(map, marker);
+                        });
+                        
+                        marker.category = 'emergency';
+                        markerGroups.emergencyServices.push(marker);
+                        allMarkers.push(marker);
+                    }
+                });
+            });
+        }
+        
+        function addTrafficIncidentMarkers() {
+            if (!routeData.traffic || !routeData.traffic.traffic_analysis) return;
+            
+            const heavyTraffic = routeData.traffic.traffic_analysis.filter(t => 
+                t.congestion_level === 'HEAVY' || t.congestion_level === 'MODERATE'
+            );
+            
+            heavyTraffic.forEach(traffic => {
+                const marker = new google.maps.Marker({
+                    position: { lat: traffic.latitude, lng: traffic.longitude },
+                    map: map,
+                    title: `${traffic.congestion_level} Traffic`,
+                    icon: createCustomIcon('#ffc107', '🚦')
+                });
+                
+                const infoWindow = new google.maps.InfoWindow({
+                    content: createTrafficInfoContent(traffic)
+                });
+                
+                marker.addListener('click', () => {
+                    infoWindow.open(map, marker);
+                });
+                
+                marker.category = 'traffic';
+                markerGroups.trafficIncidents.push(marker);
+                allMarkers.push(marker);
+            });
+        }
+        
+        // Info content creators
+        function createPOIInfoContent(poi, type) {
+            return `
+                <div style="max-width: 300px;">
+                    <h6><strong>${poi.name || 'Unknown Facility'}</strong></h6>
+                    <p><small>${poi.address || 'Address not available'}</small></p>
+                    ${poi.phone_number || poi.formatted_phone_number ? 
+                        `<p><strong>Phone:</strong> <a href="tel:${poi.phone_number || poi.formatted_phone_number}">${poi.phone_number || poi.formatted_phone_number}</a></p>` : 
+                        ''
+                    }
+                    ${poi.rating ? `<p><strong>Rating:</strong> ⭐ ${poi.rating}</p>` : ''}
+                    <p><small><strong>Category:</strong> ${type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</small></p>
+                </div>
+            `;
+        }
+        
+        function createTurnInfoContent(turn) {
+            return `
+                <div style="max-width: 300px;">
+                    <h6><strong>⚠️ Sharp Turn Alert</strong></h6>
+                    <p><strong>Angle:</strong> ${turn.angle}°</p>
+                    <p><strong>Classification:</strong> ${turn.classification}</p>
+                    <p><strong>Danger Level:</strong> <span style="color: ${getDangerColor(turn.danger_level)}">${turn.danger_level}</span></p>
+                    <p><strong>Recommended Speed:</strong> ${turn.recommended_speed} km/h</p>
+                    <p><small><strong>Location:</strong> ${turn.latitude.toFixed(6)}, ${turn.longitude.toFixed(6)}</small></p>
+                </div>
+            `;
+        }
+        
+        function createNetworkInfoContent(issue) {
+            return `
+                <div style="max-width: 300px;">
+                    <h6><strong>📵 Network ${issue.is_dead_zone ? 'Dead' : 'Poor Coverage'} Zone</strong></h6>
+                    <p><strong>Coverage Quality:</strong> ${issue.coverage_quality}</p>
+                    <p><strong>Signal Strength:</strong> ${issue.signal_strength || 'N/A'} dBm</p>
+                    <p><strong>Network Type:</strong> ${issue.network_type || 'Unknown'}</p>
+                    <p><small><strong>Recommendation:</strong> ${issue.is_dead_zone ? 'Use satellite communication device' : 'Download offline maps'}</small></p>
+                </div>
+            `;
+        }
+        
+        function createEmergencyInfoContent(service, type) {
+            return `
+                <div style="max-width: 300px;">
+                    <h6><strong>🚨 ${service.name || 'Emergency Service'}</strong></h6>
+                    <p><strong>Type:</strong> ${type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                    <p><small>${service.address || 'Address not available'}</small></p>
+                    ${service.phone_number ? 
+                        `<p><strong>Emergency Contact:</strong> <a href="tel:${service.phone_number}" style="color: red; font-weight: bold;">${service.phone_number}</a></p>` : 
+                        ''
+                    }
+                    <p><small><strong>Distance:</strong> ${service.distance_from_route || 'N/A'} km from route</small></p>
+                </div>
+            `;
+        }
+        
+        function createTrafficInfoContent(traffic) {
+            return `
+                <div style="max-width: 300px;">
+                    <h6><strong>🚦 Traffic Congestion</strong></h6>
+                    <p><strong>Level:</strong> <span style="color: ${getTrafficColor(traffic.congestion_level)}">${traffic.congestion_level}</span></p>
+                    <p><strong>Current Speed:</strong> ${traffic.current_speed || 'N/A'} km/h</p>
+                    <p><strong>Free Flow Speed:</strong> ${traffic.free_flow_speed || 'N/A'} km/h</p>
+                    <p><strong>Travel Time Index:</strong> ${traffic.travel_time_index || 'N/A'}</p>
+                </div>
+            `;
+        }
+        
+        function getDangerColor(dangerLevel) {
+            const colors = {
+                'CRITICAL': '#dc3545',
+                'EXTREME': '#fd7e14',
+                'HIGH': '#ffc107',
+                'MEDIUM': '#28a745',
+                'LOW': '#17a2b8'
+            };
+            return colors[dangerLevel] || '#6c757d';
+        }
+        
+        function getTrafficColor(congestionLevel) {
+            const colors = {
+                'HEAVY': '#dc3545',
+                'MODERATE': '#ffc107',
+                'LIGHT': '#28a745',
+                'FREE_FLOW': '#17a2b8'
+            };
+            return colors[congestionLevel] || '#6c757d';
+        }
+        
+        function fitMapToRoute(routePoints) {
+            const bounds = new google.maps.LatLngBounds();
+            routePoints.forEach(point => {
+                bounds.extend(new google.maps.LatLng(point.latitude, point.longitude));
+            });
+            map.fitBounds(bounds);
+            
+            // Ensure minimum zoom level
+            google.maps.event.addListenerOnce(map, 'bounds_changed', function() {
+                if (map.getZoom() > 15) {
+                    map.setZoom(15);
+                }
+            });
+        }
+        
+        function displayRouteInfo() {
+            const overview = routeData.overview;
+            if (!overview || !overview.route_info) {
+                $('#routeInfoPanel').html('<div class="text-danger">Failed to load route information</div>');
+                return;
+            }
+            
+            const route = overview.route_info;
+            const stats = overview.statistics || {};
+            
+            $('#routeDetails').html(`
+                <strong>${route.from_address || 'Unknown Start'}</strong> → 
+                <strong>${route.to_address || 'Unknown End'}</strong><br>
+                <small>Distance: ${route.distance || 'N/A'} | Duration: ${route.duration || 'N/A'} | Points: ${stats.total_points || 0}</small>
+            `);
+            
+            let infoHtml = `
+                <div class="route-summary mb-3">
+                    <h6><i class="fas fa-info-circle me-2"></i>Route Summary</h6>
+                    <table class="table table-sm">
+                        <tr><td><strong>From:</strong></td><td>${route.from_address || 'Unknown'}</td></tr>
+                        <tr><td><strong>To:</strong></td><td>${route.to_address || 'Unknown'}</td></tr>
+                        <tr><td><strong>Distance:</strong></td><td>${route.distance || 'Unknown'}</td></tr>
+                        <tr><td><strong>Duration:</strong></td><td>${route.duration || 'Unknown'}</td></tr>
+                        <tr><td><strong>GPS Points:</strong></td><td>${stats.total_points || 0}</td></tr>
+                    </table>
+                </div>
+            `;
+            
+            // Add POI summary
+            if (routeData.pois && routeData.pois.pois_by_type) {
+                infoHtml += `<div class="poi-summary mb-3">
+                    <h6><i class="fas fa-map-marker-alt me-2"></i>Points of Interest</h6>`;
+                
+                const categories = [
+                    { key: 'hospitals', name: 'Medical', icon: 'hospital-icon' },
+                    { key: 'police', name: 'Police', icon: 'police-icon' },
+                    { key: 'fire_stations', name: 'Fire', icon: 'fire-icon' },
+                    { key: 'gas_stations', name: 'Fuel', icon: 'gas-icon' }
+                ];
+                
+                categories.forEach(category => {
+                    const pois = routeData.pois.pois_by_type[category.key] || [];
+                    if (pois.length > 0) {
+                        infoHtml += `
+                            <div class="poi-item">
+                                <span class="poi-icon ${category.icon}">+</span>
+                                <strong>${category.name}:</strong> ${pois.length} found
                             </div>
-                            
-                            <div class="coordinates">
-                                <strong>📍 Key Route Coordinates:</strong><br>
-                                <strong>Start Point:</strong> ${points[0].latitude.toFixed(6)}, ${points[0].longitude.toFixed(6)}<br>
-                                <strong>End Point:</strong> ${points[points.length-1].latitude.toFixed(6)}, ${points[points.length-1].longitude.toFixed(6)}<br>
-                                <strong>Map Center:</strong> ${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}<br>
-                                <strong>Route Bounds:</strong> ${minLat.toFixed(4)},${minLng.toFixed(4)} to ${maxLat.toFixed(4)},${maxLng.toFixed(4)}
-                            </div>
-                        </div>
-                        
-                        <div class="route-path-info">
-                            <h4>🛣️ Route Path Information</h4>
-                            <p><strong>Total GPS Points:</strong> ${points.length} coordinates tracked</p>
-                            <p><strong>Route Sampling:</strong> Displaying ${samplePoints.length} key waypoints for optimal performance</p>
-                            <p><strong>Path Coverage:</strong> Complete route from start to destination with GPS precision</p>
-                        </div>
-                        
-                        <div class="map-preview">
-                            <div style="font-size: 3rem; margin-bottom: 20px;">🗺️</div>
-                            <h3>Interactive Route Map</h3>
-                            <p style="max-width: 500px; line-height: 1.6;">
-                                This map displays your complete route with ${points.length} GPS points, 
-                                showing the exact path from start to destination with all critical waypoints marked.
-                            </p>
-                            <div style="margin-top: 20px;">
-                                <a href="${googleMapsUrl}" target="_blank" class="external-link">
-                                    🗺️ Open Full Route in Google Maps
-                                </a>
-                            </div>
-                        </div>
-                        
-                        <div class="route-features">
-                            <h4>🎯 Route Features Available</h4>
-                            <p>Your route includes the following mapped features:</p>
-                            <div class="feature-list">
-                                <div class="feature-item">
-                                    <span class="feature-icon">🛣️</span>
-                                    <span>Complete GPS route path with ${points.length} coordinates</span>
-                                </div>
-                                <div class="feature-item">
-                                    <span class="feature-icon">📍</span>
-                                    <span>Start and end point markers</span>
-                                </div>
-                                <div class="feature-item">
-                                    <span class="feature-icon">🏥</span>
-                                    <span>Hospital and emergency service locations</span>
-                                </div>
-                                <div class="feature-item">
-                                    <span class="feature-icon">⛽</span>
-                                    <span>Fuel stations along the route</span>
-                                </div>
-                                <div class="feature-item">
-                                    <span class="feature-icon">🚔</span>
-                                    <span>Police and security services</span>
-                                </div>
-                                <div class="feature-item">
-                                    <span class="feature-icon">🔄</span>
-                                    <span>Sharp turns and critical points</span>
-                                </div>
-                                <div class="feature-item">
-                                    <span class="feature-icon">📱</span>
-                                    <span>Network coverage and dead zones</span>
-                                </div>
-                                <div class="feature-item">
-                                    <span class="feature-icon">🌦️</span>
-                                    <span>Weather conditions analysis</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div style="text-align: center; margin-top: 30px;">
-                            <h4>🚀 Launch Interactive Navigation</h4>
-                            <p>Choose your preferred mapping service to view the complete route with all features:</p>
-                            
-                            <a href="${googleMapsUrl}" target="_blank" class="external-link">
-                                🗺️ Google Maps with Route
-                            </a>
-                            <a href="https://maps.google.com/maps?q=${startPoint}" target="_blank" class="external-link">
-                                📍 Start Point Navigation
-                            </a>
-                            <a href="https://maps.google.com/maps?q=${endPoint}" target="_blank" class="external-link">
-                                🎯 End Point Navigation
-                            </a>
-                            <a href="https://www.openstreetmap.org/?mlat=${centerLat}&mlon=${centerLng}&zoom=12" target="_blank" class="external-link">
-                                🗺️ OpenStreetMap View
-                            </a>
-                        </div>
-                        
-                        <div style="text-align: center; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-                            <small style="color: #6c757d;">
-                                <strong>💡 Pro Tip:</strong> Click "Google Maps with Route" to see your complete journey path with turn-by-turn directions.
-                                The route includes all ${points.length} GPS coordinates for precise navigation.
+                        `;
+                    }
+                });
+                
+                infoHtml += '</div>';
+            }
+            
+            // Add safety summary
+            if (routeData.turns && routeData.turns.summary) {
+                const summary = routeData.turns.summary;
+                infoHtml += `
+                    <div class="safety-summary mb-3">
+                        <h6><i class="fas fa-exclamation-triangle me-2"></i>Safety Information</h6>
+                        <div class="alert alert-warning py-2">
+                            <small>
+                                <strong>Sharp Turns:</strong> ${summary.total_turns || 0}<br>
+                                <strong>Most Dangerous:</strong> ${summary.most_dangerous_angle || 0}°<br>
+                                <strong>Critical Turns:</strong> ${summary.critical_turns_count || 0}
                             </small>
                         </div>
                     </div>
-                </body>
-                </html>
-            `;
+                `;
+            }
             
-            $('#mapFrame').attr('src', 'data:text/html;base64,' + btoa(mapHtml));
+            // Add network summary
+            if (routeData.network && routeData.network.statistics) {
+                const netStats = routeData.network.statistics;
+                infoHtml += `
+                    <div class="network-summary mb-3">
+                        <h6><i class="fas fa-wifi me-2"></i>Network Coverage</h6>
+                        <div class="alert alert-info py-2">
+                            <small>
+                                <strong>Overall Score:</strong> ${netStats.overall_coverage_score || 0}%<br>
+                                <strong>Dead Zones:</strong> ${netStats.dead_zones_count || 0}<br>
+                                <strong>Good Coverage:</strong> ${netStats.good_coverage_percentage || 0}%
+                            </small>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            $('#routeInfoPanel').html(infoHtml);
         }
         
-        function centerMap() {
-            if (routeData?.route_points?.length > 0) {
-                initializeMap(routeData);
+        function displayStatistics() {
+            const overview = routeData.overview;
+            const pois = routeData.pois;
+            const turns = routeData.turns;
+            const network = routeData.network;
+            
+            if (overview && overview.statistics) {
+                $('#routePoints').text(overview.statistics.total_points || 0);
+                $('#sharpTurns').text(overview.statistics.total_sharp_turns || 0);
+            }
+            
+            if (pois && pois.statistics) {
+                $('#totalPOIs').text(pois.statistics.total_pois || 0);
+                $('#emergencyServices').text(pois.statistics.emergency_services || 0);
+            }
+            
+            if (network && network.statistics) {
+                const deadZones = network.statistics.dead_zones_count || 0;
+                const poorZones = network.statistics.poor_coverage_count || 0;
+                $('#networkIssues').text(deadZones + poorZones);
             }
         }
         
-        function togglePOIs() {
-            poisVisible = !poisVisible;
-            // This would toggle POI visibility on the map
-            // Implementation depends on the mapping library used
+        // Animation functions
+        function startAnimation() {
+            if (!routeData.overview || !routeData.overview.route_points) {
+                alert('No route data available for animation');
+                return;
+            }
+            
+            const routePoints = routeData.overview.route_points;
+            if (isAnimating) {
+                pauseAnimation();
+                return;
+            }
+            
+            isAnimating = true;
+            currentAnimationStep = 0;
+            
+            // Create animation marker
+            if (!animationMarker) {
+                animationMarker = new google.maps.Marker({
+                    map: map,
+                    title: 'Current Position',
+                    icon: {
+                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" fill="#ff6b35" stroke="white" stroke-width="3"/>
+                                <circle cx="12" cy="12" r="4" fill="white"/>
+                                <circle cx="12" cy="12" r="1" fill="#ff6b35"/>
+                            </svg>
+                        `),
+                        scaledSize: new google.maps.Size(24, 24),
+                        anchor: new google.maps.Point(12, 12)
+                    }
+                });
+            }
+            
+            const speed = parseInt($('#speedControl').val()) || 5;
+            const interval = Math.max(50, 600 - (speed * 50));
+            
+            animationInterval = setInterval(() => {
+                if (currentAnimationStep >= routePoints.length) {
+                    resetAnimation();
+                    return;
+                }
+                
+                const currentPoint = routePoints[currentAnimationStep];
+                animationMarker.setPosition({
+                    lat: currentPoint.latitude,
+                    lng: currentPoint.longitude
+                });
+                
+                // Update progress
+                const progress = (currentAnimationStep / routePoints.length) * 100;
+                $('#journeyProgress').css('width', progress + '%');
+                $('#progressText').text(`Traveling... ${progress.toFixed(1)}% complete`);
+                $('#progressStats').text(`${currentAnimationStep + 1} / ${routePoints.length} points`);
+                
+                // Pan map to follow animation
+                if (currentAnimationStep % 20 === 0) {
+                    map.panTo({ lat: currentPoint.latitude, lng: currentPoint.longitude });
+                }
+                
+                currentAnimationStep++;
+            }, interval);
+            
+            $('#playBtn').html('<i class="fas fa-pause"></i>');
+        }
+        
+        function pauseAnimation() {
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+            }
+            isAnimating = false;
+            $('#playBtn').html('<i class="fas fa-play"></i>');
+        }
+        
+        function resetAnimation() {
+            pauseAnimation();
+            currentAnimationStep = 0;
+            $('#journeyProgress').css('width', '0%');
+            $('#progressText').text('Ready to start animation');
+            $('#progressStats').text('0 / 0 points');
+            
+            if (animationMarker) {
+                animationMarker.setMap(null);
+                animationMarker = null;
+            }
+        }
+        
+        // Map control functions
+        function centerMapOnRoute() {
+            if (!routeData.overview || !routeData.overview.route_points) return;
+            fitMapToRoute(routeData.overview.route_points);
+        }
+        
+        function togglePOIMarkers() {
+            const button = event.target.closest('.control-btn');
+            const isActive = button.classList.contains('active');
+            
+            markerGroups.pois.forEach(marker => {
+                marker.setMap(isActive ? null : map);
+            });
+            
+            button.classList.toggle('active');
+        }
+        
+        function toggleSharpTurns() {
+            const button = event.target.closest('.control-btn');
+            const isActive = button.classList.contains('active');
+            
+            markerGroups.sharpTurns.forEach(marker => {
+                marker.setMap(isActive ? null : map);
+            });
+            
+            button.classList.toggle('active');
+        }
+        
+        function toggleNetworkCoverage() {
+            const button = event.target.closest('.control-btn');
+            const isActive = button.classList.contains('active');
+            
+            markerGroups.networkIssues.forEach(marker => {
+                marker.setMap(isActive ? null : map);
+            });
+            
+            button.classList.toggle('active');
+        }
+        
+        function toggleEmergencyServices() {
+            const button = event.target.closest('.control-btn');
+            const isActive = button.classList.contains('active');
+            
+            markerGroups.emergencyServices.forEach(marker => {
+                marker.setMap(isActive ? null : map);
+            });
+            
+            button.classList.toggle('active');
+        }
+        
+        function toggleMapType() {
+            const button = event.target.closest('.control-btn');
+            const isActive = button.classList.contains('active');
+            
+            if (isActive) {
+                map.setMapTypeId(google.maps.MapTypeId.ROADMAP);
+                button.innerHTML = '<i class="fas fa-satellite"></i>';
+            } else {
+                map.setMapTypeId(google.maps.MapTypeId.SATELLITE);
+                button.innerHTML = '<i class="fas fa-map"></i>';
+            }
+            
+            button.classList.toggle('active');
+        }
+        
+        function toggleTraffic() {
+            const button = event.target;
+            
+            if (trafficLayer.getMap()) {
+                trafficLayer.setMap(null);
+                button.innerHTML = '<i class="fas fa-traffic-light me-1"></i>Traffic';
+                button.classList.remove('btn-warning');
+                button.classList.add('btn-light');
+            } else {
+                trafficLayer.setMap(map);
+                button.innerHTML = '<i class="fas fa-traffic-light me-1"></i>Hide Traffic';
+                button.classList.remove('btn-light');
+                button.classList.add('btn-warning');
+            }
+        }
+        
+        function clearAllMarkers() {
+            allMarkers.forEach(marker => marker.setMap(null));
+            allMarkers = [];
+            Object.keys(markerGroups).forEach(key => {
+                markerGroups[key] = [];
+            });
         }
         
         function showError(message) {
-            $('#poiList').html(`<div class="alert alert-danger">${message}</div>`);
+            $('#routeInfoPanel').html(`
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${message}
+                </div>
+            `);
+            console.error('Map Error:', message);
         }
+        
+        // GPS tracking simulation (for demo purposes)
+        function startGPSTracking() {
+            if (!routeData.overview || !routeData.overview.route_points) return;
+            
+            $('#gpsTracker').show();
+            
+            // Simulate GPS tracking by following route points
+            const routePoints = routeData.overview.route_points;
+            let trackingIndex = 0;
+            
+            const trackingInterval = setInterval(() => {
+                if (trackingIndex >= routePoints.length) {
+                    clearInterval(trackingInterval);
+                    $('#gpsTracker').hide();
+                    return;
+                }
+                
+                const currentPoint = routePoints[trackingIndex];
+                const progress = (trackingIndex / routePoints.length) * 100;
+                
+                $('#gpsPosition').text(`Lat: ${currentPoint.latitude.toFixed(6)}, Lng: ${currentPoint.longitude.toFixed(6)}`);
+                $('#routeProgress').text(`Progress: ${progress.toFixed(1)}%`);
+                
+                trackingIndex++;
+            }, 2000);
+        }
+        
+        // Initialize GPS tracking button (optional)
+        function addGPSTrackingButton() {
+            const gpsButton = `
+                <button class="btn btn-info btn-sm" onclick="startGPSTracking()" title="Simulate GPS tracking">
+                    <i class="fas fa-location-arrow me-1"></i>GPS Track
+                </button>
+            `;
+            $('.route-info .col-md-4').append(gpsButton);
+        }
+        
+        // Initialize map when script loads
+        window.initMap = function() {
+            console.log('Google Maps API loaded successfully');
+        };
     </script>
 </body>
 </html>
